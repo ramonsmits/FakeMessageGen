@@ -1,0 +1,5 @@
+﻿enum State
+{
+    Running,
+    Paused
+}
