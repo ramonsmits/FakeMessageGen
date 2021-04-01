@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using NServiceBus;
 
@@ -27,7 +28,8 @@ public class FakeMessageGenerator
     const int ExceptionMessagesMax = 100;
     const int ExceptionTypesMax = 50;
 
-    static readonly byte[] RandomData = Encoding.ASCII.GetBytes(File.ReadAllText("original.txt"));
+    static readonly string appPath = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location);
+    static readonly byte[] RandomData = Encoding.ASCII.GetBytes(File.ReadAllText(Path.Combine(appPath, "original.txt")));
     static readonly List<string> RandomExceptionStackTraces = RandomStrings(ExceptionStackTracesMax, 1000, 8000, Sentences);
     static readonly List<string> RandomExceptionMessages = RandomStrings(ExceptionMessagesMax, 15, 50, Lines);
     static readonly List<string> RandomExceptionTypes = RandomStrings(ExceptionTypesMax, 15, 250, Types);
