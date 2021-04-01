@@ -5,7 +5,7 @@ using System.Linq;
 using System.Text;
 using NServiceBus;
 
-class FakeMessageGenerator
+public class FakeMessageGenerator
 {
     const string Sentences = "ABCD EFGH IJKL MNOP QRST UVWX YZ01 2345 6789\n";
     const string Lines = "ABCD EFGH IJKL MNOP QRST UVWX YZ01 2345 6789";
