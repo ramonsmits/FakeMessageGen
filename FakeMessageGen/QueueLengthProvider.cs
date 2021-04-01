@@ -157,7 +157,7 @@
 }
 namespace ServiceControl.Transports
 {
-    public class EndpointToQueueMapping
+    class EndpointToQueueMapping
     {
         public EndpointToQueueMapping(string endpointName, string inputQueue)
         {
@@ -215,7 +215,7 @@ namespace ServiceControl.Transports
 }
 namespace ServiceControl.Transports
 {
-    public class QueueLengthEntry
+    class QueueLengthEntry
     {
         public long DateTicks { get; set; }
         public long Value { get; set; }
@@ -227,7 +227,7 @@ namespace ServiceControl.Transports
     using System;
     using System.Threading.Tasks;
 
-    public interface IProvideQueueLength
+    interface IProvideQueueLength
     {
         void Initialize(string connectionString, Action<QueueLengthEntry[], EndpointToQueueMapping> store);
 
