@@ -2,20 +2,21 @@
 
     <PropertyGroup>
         <OutputType>Exe</OutputType>
-        <TargetFrameworks>net472;netcoreapp3.1</TargetFrameworks>
+        <TargetFramework>net9.0</TargetFramework>
         <LangVersion>latest</LangVersion>
     </PropertyGroup>
 
     <ItemGroup>
-      <PackageReference Include="App.Metrics.Reporting.Console" Version="4.*" />
-      <PackageReference Include="NServiceBus.Raw" Version="3.*" />
-      <PackageReference Include="NServiceBus.Transport.AzureServiceBus" Version="1.*" />
+        <PackageReference Include="Azure.Messaging.ServiceBus" Version="7.*"/>
+        <PackageReference Include="NServiceBus.Raw" Version="4.*"/>
+        <PackageReference Include="NServiceBus.Transport.AzureServiceBus" Version="3.*"/>
+        <PackageReference Include="NServiceBus.RabbitMQ" Version="8.*"/>
     </ItemGroup>
 
     <ItemGroup>
-      <None Update="original.txt">
-        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-      </None>
+        <None Update="original.txt">
+            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+        </None>
     </ItemGroup>
 
 </Project>

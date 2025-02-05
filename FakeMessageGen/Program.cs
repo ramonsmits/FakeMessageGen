@@ -1,36 +1,44 @@
 ﻿using System;
+using System.Collections.Concurrent;
+using System.Globalization;
+using System.IO;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using App.Metrics;
-using App.Metrics.Meter;
-using App.Metrics.Scheduling;
 using NServiceBus;
-using NServiceBus.Extensibility;
 using NServiceBus.Logging;
 using NServiceBus.Raw;
 using NServiceBus.Routing;
 using NServiceBus.Transport;
-using ServiceControl.Transports;
-using ServiceControl.Transports.ASBS;
 
 static partial class Program
 {
     static string destination;
     static bool isError;
 
+    static int MaxQueueLength = 100000;
+    static int RateLimit = 5000;
     static int MaxConcurrency = 100;
-    static int MaxQueueLength = 1000;
-    static int RateLimit = 1000;
+    static int BatchSize = 16;
+    private static string ConnectionString;
 
-    static readonly object lockObj = new();
+    static readonly TimeSpan QueryDelayInterval = TimeSpan.FromSeconds(2);
+
     static readonly SemaphoreSlim concurrency = new(MaxConcurrency);
-    static RateGate rateLimiter; 
+    static RateGate rateLimiter;
     static IReceivingRawEndpoint sender;
     static State state = State.Running;
 
+    static TransportDefinition transportDefinition;
+    static IQueueMetrics queueMetrics;
+
+    static readonly CancellationTokenSource ShutdownCancellationTokenSource = new();
+    static readonly TaskCompletionSource<object> ShutdownTcs = new();
+
     static async Task Main(string[] args)
     {
+        SetupEnvironment();
+
         try
         {
             destination = args[0];
@@ -38,6 +46,8 @@ static partial class Program
             if (args.Length > 2) MaxQueueLength = int.Parse(args[2]);
             if (args.Length > 3) RateLimit = int.Parse(args[3]);
             if (args.Length > 4) MaxConcurrency = int.Parse(args[4]);
+            if (args.Length > 5) BatchSize = int.Parse(args[5]);
+            if (args.Length > 6) ConnectionString = args[6];
         }
         catch
         {
@@ -45,60 +55,233 @@ static partial class Program
             return;
         }
 
-        rateLimiter = new(RateLimit, TimeSpan.FromSeconds(1));
+        CreateRateGate();
 
+        if (SetupTransport()) return;
+
+        try
+        {
+            Console.WriteLine("\e[?1049h");
+
+            InitFrames();
+
+            Console.WriteLine($"""
+                                        Using: {transportDefinition.GetType().Name}
+                                    RateLimit: {RateLimit:N0}/s
+                                    BatchSize: {BatchSize:N0}
+                                  Destination: {destination}
+                                      IsError: {isError}
+                               MaxQueueLength: {MaxQueueLength:N0}
+                               MaxConcurrency: {MaxConcurrency:N0}
+                               """);
+
+
+            LogManager.UseFactory(new FrameLoggerFactory(logFrame));
+            AppDomain.CurrentDomain.UnhandledException += (o, ea) => main.WriteLine(Ansi.GetAnsiColor(ConsoleColor.Magenta) + DateTime.UtcNow + " UnhandledException: " + ((Exception)ea.ExceptionObject).Message + Ansi.Reset);
+            AppDomain.CurrentDomain.FirstChanceException += (o, ea) => main.WriteLine(Ansi.GetAnsiColor(ConsoleColor.DarkCyan) + DateTime.UtcNow + " FirstChanceException: " + ea.Exception.Message);
+
+            var senderConfig = RawEndpointConfiguration.CreateSendOnly(endpointName: "EndpointName", transportDefinition);
+
+            var queueLengthTask = CheckQueue(ShutdownCancellationTokenSource.Token);
+
+            sender = await RawEndpoint.Start(senderConfig);
+
+            var sendLoopTask = SendLoop(ShutdownCancellationTokenSource.Token);
+
+            Console.WriteLine("Press CTRL+C to exit...");
+            await ShutdownTcs.Task;
+
+            Console.WriteLine("Waiting for running tasks to complete...");
+            await sendLoopTask;
+            await queueLengthTask;
+        }
+        finally
+        {
+            Console.WriteLine("\e[?1049l"); // Restore main buffer
+            Console.WriteLine("Fin!");
+            Console.ReadLine();
+        }
+    }
+
+    static async Task SendLoop(CancellationToken token)
+    {
+        var activeTasks = new ConcurrentDictionary<Task, byte>();
+
+        while (!token.IsCancellationRequested)
+        {
+            await rateLimiter.WaitAsync();
+            await concurrency.WaitAsync();
+            Metrics.BatchSizeAdd(BatchSize);
+
+            async void Do()
+            {
+                var t = Send(isError);
+                activeTasks.TryAdd(t, 0);
+                await t;
+                activeTasks.TryRemove(t, out _);
+            }
+
+            Do();
+        }
+
+        await Task.WhenAll(activeTasks.Keys);
+    }
+
+    static bool SetupTransport()
+    {
+        if (!string.IsNullOrEmpty(ConnectionString))
+        {
+            if (ConnectionString.StartsWith("Endpoint"))
+            {
+                SetupAzureServiceBus();
+            }
+            else if (ConnectionString.StartsWith("/") || ConnectionString.Contains(":\\"))
+            {
+                SetupLearning();
+            }
+            else
+            {
+                SetupRabbitMQ();
+            }
+
+            return true;
+        }
+
+        var envvars = Environment.GetEnvironmentVariables();
+
+        var hasASB = envvars.Contains("CONNECTIONSTRING_AZURESERVICEBUS");
+        var hasRMQ = envvars.Contains("CONNECTIONSTRING_RABBITMQ");
+        var hasLearning = envvars.Contains("CONNECTIONSTRING_LEARNING");
+
+        if (hasASB) Console.WriteLine(" [a] Azure ServiceBus");
+        if (hasRMQ) Console.WriteLine(" [r] RabbitMQ");
+        if (hasLearning) Console.WriteLine(" [l] Learning Transport");
+
+        var transportSelector = Console.ReadKey().KeyChar;
+
+        if (hasASB && transportSelector == 'a') SetupAzureServiceBus();
+        else if (hasRMQ && transportSelector == 'r') SetupRabbitMQ();
+        else if (hasLearning && transportSelector == 'l') SetupLearning();
+        else
+        {
+            Console.WriteLine($"Option {transportSelector} is not supported or not available");
+            return true;
+        }
+
+        return false;
+
+        static void SetupLearning()
+        {
+            var connectionString = Environment.ExpandEnvironmentVariables(Environment.GetEnvironmentVariable("CONNECTIONSTRING_LEARNING")!);
+            transportDefinition = new LearningTransport
+            {
+                StorageDirectory = connectionString
+            };
+            queueMetrics = new LearningMetrics(connectionString);
+        }
+
+        static void SetupRabbitMQ()
+        {
+            var connectionString = Environment.ExpandEnvironmentVariables(Environment.GetEnvironmentVariable("CONNECTIONSTRING_AZURESERVICEBUS")!);
+            transportDefinition = new RabbitMQTransport(RoutingTopology.Conventional(QueueType.Quorum), connectionString);
+            queueMetrics = RabbitMqMetrics.Parse(connectionString);
+        }
+
+        static void SetupAzureServiceBus()
+        {
+            Console.Write("Use AzureServiceBus with `CONNECTIONSTRING_AZURESERVICEBUS`?");
+            var connectionString = Environment.ExpandEnvironmentVariables(Environment.GetEnvironmentVariable("CONNECTIONSTRING_AZURESERVICEBUS")!);
+            transportDefinition = new AzureServiceBusTransport(connectionString);
+            queueMetrics = new ServiceBusMetrics(connectionString);
+        }
+    }
+
+    static void SetupEnvironment()
+    {
         Console.OutputEncoding = Encoding.UTF8;
+        var customCulture = (CultureInfo)CultureInfo.InvariantCulture.Clone();
+        customCulture.DateTimeFormat.ShortDatePattern = "yyyy-MM-dd";
+        customCulture.DateTimeFormat.LongTimePattern = "HH:mm:ss";
+        CultureInfo.CurrentCulture = customCulture;
+        CultureInfo.CurrentUICulture = customCulture;
 
-        InitFrames();
-
-        LogManager.UseFactory(new FrameLoggerFactory(logFrame));
-
-        var metrics = new MetricsBuilder()
-            .Report.ToConsole(o =>
-            {
-                o.MetricsOutputFormatter = new App.Metrics.Formatters.Ascii.MetricsTextOutputFormatter();
-                o.FlushInterval = TimeSpan.FromSeconds(5);
-            })
-            .Build();
-
-        var rate = new MeterOptions
+        Console.CancelKeyPress += (sender, e) =>
         {
-            Name = "rate",
-            MeasurementUnit = Unit.Calls,
-            RateUnit = TimeUnit.Seconds
+            e.Cancel = true;
+            ShutdownTcs.TrySetResult(null);
+            ShutdownCancellationTokenSource.Cancel();
         };
+    }
 
-        var scheduler = new AppMetricsTaskScheduler(
-            TimeSpan.FromSeconds(5),
-            async () => { await Task.WhenAll(metrics.ReportRunner.RunAllAsync()); });
-        scheduler.Start();
+    static void CreateRateGate()
+    {
+        var batchesPerSec = RateLimit / BatchSize; // 6 (integer division)
+        var windowMs = 1000.0 / batchesPerSec * RateLimit / BatchSize;
+        var timeUnit = TimeSpan.FromMilliseconds(windowMs);
+        rateLimiter = new(batchesPerSec, timeUnit);
+    }
+
+    static readonly FastArrayProvider<TransportOperation> _provider =
+        new(BatchSize, () => CreateOperation());
 
 
-        var senderConfig = RawEndpointConfiguration.CreateSendOnly(endpointName: "EndpointName");
-
-        var cs = Environment.ExpandEnvironmentVariables(
-            Environment.GetEnvironmentVariable("AzureServiceBus_ConnectionString")!);
-
-        var transport = senderConfig.UseTransport<AzureServiceBusTransport>();
-        transport.ConnectionString(cs);
-
-        var queueLengthProvider = new QueueLengthProvider();
-        queueLengthProvider.Initialize(cs, (a, b) =>
+    static async Task Send(bool isError)
+    {
+        var (array, length) = _provider.Rent();
+        try
         {
-            var count = a[0].Value;
-            queueFrame.WriteLine($"{DateTime.Now} {b.InputQueue} = {a[0].Value}");
+            await sender.Dispatch(
+                outgoingMessages: new TransportOperations(array),
+                transaction: new TransportTransaction()
+            );
+        }
+        catch (Exception ex)
+        {
+            Metrics.FaultsAdd(1);
+            log.WriteLine(DateTime.UtcNow + " Send error: " + ex.Message);
+        }
+        finally
+        {
+            concurrency.Release();
+            _provider.Return(array, length);
+        }
+    }
 
-            lock (lockObj)
+    static TransportOperation CreateOperation()
+    {
+        var msg = FakeMessageGenerator.Create(isError);
+        var request = new OutgoingMessage(msg.id, headers: msg.headers, body: msg.body);
+        var operation = new TransportOperation(request, new UnicastAddressTag(destination));
+        return operation;
+    }
+
+    static async Task CheckQueue(CancellationToken cancellationToken)
+    {
+        while (!cancellationToken.IsCancellationRequested)
+        {
+            try
             {
-                if (count > MaxQueueLength)
+                var queueLength = await queueMetrics.GetQueueLengthAsync(destination);
+                var rates = Metrics.SendsAggregator.GetRates();
+                queue.WriteLine(
+                    $"{DateTime.Now} [queued: {queueLength,10:N0}" +
+                    $" Rates/sec [now:{rates.CurrentPerSecond,8:F1}/s]" +
+                    $" [10s:{rates.LastTenSecondsPerSecond,8:F1}/s]" +
+                    $" [1min:{rates.LastMinutePerSecond,8:F1}/s]" +
+                    $" [10min:{rates.LastTenMinutesPerSecond,8:F1}/s]" +
+                    $" [1hr:{rates.LastHourPerSecond,8:F1}/s]" +
+                    $" [lifetime:{rates.LifetimePerSecond,8:F1}/s]"
+                );
+
+                if (queueLength > MaxQueueLength)
                 {
                     // Ensure paused
                     var result = InterlockedEx.CompareExchange(ref state, State.Paused, State.Running);
 
                     if (result == State.Running)
                     {
-                        queueFrame.WriteLine("Pause");
-                        for (var x = 0; x < 100; x++)
+                        queue.WriteLine($"{State.Paused} until under {MaxQueueLength}");
+                        for (var x = 0; x < MaxConcurrency; x++)
                         {
                             concurrency.Wait();
                         }
@@ -111,61 +294,19 @@ static partial class Program
 
                     if (result == State.Paused)
                     {
-                        queueFrame.WriteLine("Continue");
-                        concurrency.Release(100);
+                        queue.WriteLine($"{State.Running} until above {MaxQueueLength}");
+                        concurrency.Release(MaxConcurrency);
                     }
                 }
+
+                await Task
+                    .Delay(QueryDelayInterval, cancellationToken)
+                    .ContinueWith(t => Task.CompletedTask, TaskContinuationOptions.ExecuteSynchronously);
             }
-        });
-
-        queueLengthProvider.TrackEndpointInputQueue(new EndpointToQueueMapping(destination, destination));
-
-        await queueLengthProvider.Start();
-
-        sender = await RawEndpoint.Start(senderConfig);
-
-        _ = Task.Run(async () =>
-        {
-            while (true)
+            catch (Exception e)
             {
-                await rateLimiter.WaitAsync();
-                await concurrency.WaitAsync();
-                metrics.Measure.Meter.Mark(rate);
-
-                _ = Send(isError);
+                Console.WriteLine(e);
             }
-        });
-
-        do
-        {
-            Console.WriteLine("Press ESC to exit...");
-        } while (Console.ReadKey(true).Key != ConsoleKey.Escape);
-
-        await sender.Stop();
-        await queueLengthProvider.Stop();
-    }
-
-    static async Task Send(bool isError)
-    {
-        try
-        {
-            var msg = FakeMessageGenerator.Create(isError);
-
-            var request = new OutgoingMessage(msg.id, headers: msg.headers, body: msg.body);
-
-            var operation = new TransportOperation(
-                request,
-                new UnicastAddressTag(destination));
-
-            await sender.Dispatch(
-                outgoingMessages: new TransportOperations(operation),
-                transaction: new TransportTransaction(),
-                context: new ContextBag());
-        }
-        finally
-        {
-            concurrency.Release();
         }
     }
-
 }

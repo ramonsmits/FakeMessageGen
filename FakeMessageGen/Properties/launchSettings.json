@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "FakeMessageGen": {
+      "commandName": "Project",
+      "commandLineArgs": "audit false"
+    }
+  }
+}

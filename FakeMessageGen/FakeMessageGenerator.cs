@@ -68,7 +68,7 @@ public class FakeMessageGenerator
             [Headers.ConversationId] = now.ToString("yyyy-M-dThh") + "_" + StaticRandom.Next(ConversationIdMax),
             //[Headers.RelatedTo] = "random",
             [Headers.MessageIntent] = intents[StaticRandom.Next(3)],
-            [Headers.TimeSent] = DateTimeExtensions.ToWireFormattedString(now),
+            [Headers.TimeSent] = DateTimeOffsetHelper.ToWireFormattedString(now),
             ["NServiceBus.OriginatingEndpoint"] = "endpoint_" + StaticRandom.Next(OriginatingEndpointMax),
             ["NServiceBus.OriginatingMachine"] = Environment.MachineName
         };
@@ -87,8 +87,8 @@ public class FakeMessageGenerator
         {
             headers["NServiceBus.ProcessingEndpoint"] = "endpoint_" + StaticRandom.Next(100);
             headers["NServiceBus.ProcessingMachine"] = Environment.MachineName;
-            headers["NServiceBus.ProcessingStarted"] = DateTimeExtensions.ToWireFormattedString(now);
-            headers["NServiceBus.ProcessingEnded"] = DateTimeExtensions.ToWireFormattedString(now.AddMilliseconds(StaticRandom.Next(20, 20000)));
+            headers["NServiceBus.ProcessingStarted"] = DateTimeOffsetHelper.ToWireFormattedString(now);
+            headers["NServiceBus.ProcessingEnded"] = DateTimeOffsetHelper.ToWireFormattedString(now.AddMilliseconds(StaticRandom.Next(20, 20000)));
         }
 
         return (id, headers, body);

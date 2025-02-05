@@ -16,8 +16,8 @@ class FrameMaster
     public event EventHandler<(int h, int w)> OnResizeAfter;
 
     static Timer UpdateUITimer;
-    
-    public static void Run(int updateInterval = 100)
+
+    public static void Run(int updateInterval = 1000 / 60) // FPS
     {
         Console.CursorVisible = false;
         UpdateUITimer = new Timer(Refresh, null, updateInterval, updateInterval);
@@ -30,7 +30,7 @@ class FrameMaster
             Instance.Update();
         }
     }
-    
+
     void Update()
     {
         var height = Console.WindowHeight;
@@ -44,9 +44,7 @@ class FrameMaster
             OnResize?.Invoke(this, (height, width));
             OnResizeAfter?.Invoke(this, (height, width));
         }
-        
-        foreach (var f in frames) f.Render();
 
-        Console.SetWindowPosition(0, 0);
+        foreach (var f in frames) f.Render();
     }
 }

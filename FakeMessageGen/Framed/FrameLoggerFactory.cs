@@ -2,7 +2,7 @@
 using System.Diagnostics;
 using System.IO;
 using System.Text;
-using Microsoft.Azure.Amqp.Framing;
+//using Microsoft.Azure.Amqp.Framing;
 using NServiceBus.Logging;
 
 class FrameLoggerFactory : ILoggerFactory
@@ -26,6 +26,7 @@ class FrameLoggerFactory : ILoggerFactory
 
     class Logger : ILog
     {
+        private const int MinLevel = 0;
         static readonly Stopwatch start = Stopwatch.StartNew();
         readonly Frame Frame;
         readonly string Name;
@@ -41,30 +42,29 @@ class FrameLoggerFactory : ILoggerFactory
             WL(0, null, message);
         }
 
+        private static string GetAnsiColor(int level) => level switch
+        {
+            0 => Ansi.GetAnsiColor(ConsoleColor.DarkGreen),
+            1 => Ansi.GetAnsiColor(ConsoleColor.Gray),
+            2 => Ansi.GetAnsiColor(ConsoleColor.DarkYellow),
+            3 => Ansi.GetAnsiColor(ConsoleColor.DarkRed),
+            4 => Ansi.GetAnsiColor(ConsoleColor.Red),
+            _ => Ansi.Reset
+        };
+
         void WL(int level, Exception ex, string message, params object[] args)
         {
-            var previous = Console.ForegroundColor;
+            if (level < MinLevel) return;
 
-            Console.ForegroundColor = level switch
-            {
-                0 => ConsoleColor.DarkGreen,
-                1 => ConsoleColor.Gray,
-                2 => ConsoleColor.DarkYellow,
-                3 => ConsoleColor.DarkRed,
-                4 => ConsoleColor.Red,
-                _ => Console.ForegroundColor
-            };
-
-            var text = start.Elapsed.TotalSeconds.ToString("N");
-            text += "|";
+            var text = GetAnsiColor(level);
+            text += start.Elapsed.TotalSeconds.ToString("N");
+            text += " | ";
             text += Name;
-            text += "|";
+            text += " | ";
             text += string.Format(message, args);
             if (ex != null) text += ex.Message;
-            
-            Frame.WriteLine(text);
 
-            Console.ForegroundColor = previous;
+            Frame.WriteLine(text);
         }
 
         public void Debug(string message, Exception exception)
