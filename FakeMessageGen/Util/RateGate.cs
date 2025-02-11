@@ -10,15 +10,15 @@ using System.Threading.Tasks;
 /// </summary>
 /// <remarks>
 ///     <para>
-///     To control the rate of an action using a <see cref="RateGate"/>, 
-///     code should simply call <see cref="WaitAsync()"/> prior to 
+///     To control the rate of an action using a <see cref="RateGate"/>,
+///     code should simply call <see cref="WaitAsync()"/> prior to
 ///     performing the action. <see cref="WaitAsync()"/> will block
-///     the current thread until the action is allowed based on the rate 
+///     the current thread until the action is allowed based on the rate
 ///     limit.
 ///     </para>
 ///     <para>
-///     This class is thread safe. A single <see cref="RateGate"/> instance 
-///     may be used to control the rate of an occurrence across multiple 
+///     This class is thread safe. A single <see cref="RateGate"/> instance
+///     may be used to control the rate of an occurrence across multiple
 ///     threads.
 ///     </para>
 /// </remarks>
@@ -51,7 +51,7 @@ sealed class RateGate : IDisposable
     public long TimeUnitTicks { get; }
 
     /// <summary>
-    /// Initializes a <see cref="RateGate"/> with a rate of <paramref name="occurrences"/> 
+    /// Initializes a <see cref="RateGate"/> with a rate of <paramref name="occurrences"/>
     /// per <paramref name="timeUnit"/>.
     /// </summary>
     /// <param name="occurrences">Number of occurrences allowed per unit of time.</param>
@@ -85,7 +85,7 @@ sealed class RateGate : IDisposable
         _exitTimer = new Timer(ExitTimerCallback, null, timeUnit, DisablePeriodicSignaling);
     }
 
-    // Callback for the exit timer that exits the semaphore based on exit times 
+    // Callback for the exit timer that exits the semaphore based on exit times
     // in the queue and then sets the timer for the next exit time.
     void ExitTimerCallback(object state)
     {
@@ -101,7 +101,7 @@ sealed class RateGate : IDisposable
             }
 
             // Try to get the next exit time from the queue and compute
-            // the time until the next check should take place. If the 
+            // the time until the next check should take place. If the
             // queue is empty, then no exit times will occur until at least
             // one time unit has passed.
             long ticksUntilNextCheck = _exitTimes.TryPeek(out exitTime)
@@ -138,7 +138,7 @@ sealed class RateGate : IDisposable
         var entered = await _semaphore.WaitAsync(millisecondsTimeout, cancellationToken)
             .ConfigureAwait(false);
 
-        // If we entered the semaphore, compute the corresponding exit time 
+        // If we entered the semaphore, compute the corresponding exit time
         // and add it to the queue.
         if (entered)
         {
@@ -164,9 +164,9 @@ sealed class RateGate : IDisposable
     /// <summary>
     /// Blocks the current thread indefinitely until allowed to proceed.
     /// </summary>
-    public Task WaitAsync()
+    public Task WaitAsync(CancellationToken cancellationToken = default)
     {
-        return WaitAsync(Timeout.Infinite, CancellationToken.None);
+        return WaitAsync(Timeout.Infinite, cancellationToken);
     }
 
     // Throws an ObjectDisposedException if this object is disposed.
@@ -190,7 +190,7 @@ sealed class RateGate : IDisposable
     {
         if (_isDisposed) return;
         if (!isDisposing) return;
-        // The semaphore and timer both implement IDisposable and 
+        // The semaphore and timer both implement IDisposable and
         // therefore must be disposed.
         _semaphore.Dispose();
         _exitTimer.Dispose();

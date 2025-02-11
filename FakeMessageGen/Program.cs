@@ -126,9 +126,11 @@ static partial class Program
             Console.WriteLine("Press CTRL+C to exit...");
             await ShutdownTcs.Task;
 
-            Console.WriteLine("Waiting for running tasks to complete...");
-            await sendLoopTask;
-            await queueLengthTask;
+            Console.WriteLine("Waiting max 5 seconds for running tasks to complete...");
+            await Task.WhenAny(
+                Task.Delay(TimeSpan.FromSeconds(5)),
+                Task.WhenAll(sendLoopTask, queueLengthTask)
+            );
         }
         finally
         {
@@ -144,8 +146,8 @@ static partial class Program
 
         while (!token.IsCancellationRequested)
         {
-            await rateLimiter.WaitAsync();
-            await concurrency.WaitAsync();
+            await rateLimiter.WaitAsync(token);
+            await concurrency.WaitAsync(token);
             Metrics.BatchSizeAdd(BatchSize);
 
             async void Do()
