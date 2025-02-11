@@ -136,7 +136,6 @@ static partial class Program
         {
             Console.Write("\e[?1049l\e[!p\e[m");
             Console.WriteLine("Fin!");
-            Console.ReadLine();
         }
     }
 
