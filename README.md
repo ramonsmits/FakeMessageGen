@@ -9,7 +9,7 @@ This is a tool to generates fake NServiceBus messages without requiring processi
 This tool requires the [.net sdk](https://dotnet.microsoft.com/en-us/download/dotnet).
 
 ```con
-dotnet tool install -g MyCompany.MyTool
+dotnet tool install -g NBraceIT.FakeMessageGen
 ```
 
 ## Help
