@@ -194,7 +194,9 @@ static partial class Program
         if (hasRMQ) Console.WriteLine(" [r] RabbitMQ");
         if (hasLearning) Console.WriteLine(" [l] Learning Transport");
 
-        var transportSelector = Console.ReadKey().KeyChar;
+        Console.WriteLine();
+
+        var transportSelector = Console.ReadKey(true).KeyChar;
 
         if (hasASB && transportSelector == 'a') SetupAzureServiceBus();
         else if (hasRMQ && transportSelector == 'r') SetupRabbitMQ();
@@ -226,7 +228,6 @@ static partial class Program
 
         static void SetupAzureServiceBus()
         {
-            Console.Write("Use AzureServiceBus with `CONNECTIONSTRING_AZURESERVICEBUS`?");
             var connectionString = Environment.ExpandEnvironmentVariables(Environment.GetEnvironmentVariable("CONNECTIONSTRING_AZURESERVICEBUS")!);
             transportDefinition = new AzureServiceBusTransport(connectionString);
             queueMetrics = new ServiceBusMetrics(connectionString);
