@@ -26,7 +26,7 @@ class Frame : TextWriter
         update = true;
     }
 
-    public override void Write(string? value)
+    public override void Write(string value)
     {
         lock (current) // TODO: Not sure if this is actually needed...
         {
