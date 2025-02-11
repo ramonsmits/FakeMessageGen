@@ -4,6 +4,14 @@
 
 This is a tool to generates fake NServiceBus messages without requiring processing first. Its purpose is to generate a large set of message for ingestion by Particular Software its ServiceControl audit and error ingestion software.
 
+## Install
+
+This tool requires the [.net sdk](https://dotnet.microsoft.com/en-us/download/dotnet).
+
+```con
+dotnet tool install -g MyCompany.MyTool
+```
+
 ## Help
 
 The command line help output:
