@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Threading;
 
-class FrameMaster
+class FrameMaster : IDisposable
 {
     public static readonly FrameMaster Instance = new();
     public readonly List<Frame> frames = new();
@@ -15,19 +15,19 @@ class FrameMaster
     public event EventHandler<(int h, int w)> OnResize;
     public event EventHandler<(int h, int w)> OnResizeAfter;
 
-    static Timer UpdateUITimer;
+    Timer UpdateUITimer;
 
-    public static void Run(int updateInterval = 1000 / 60) // FPS
+    public void Run(int updateInterval = 1000 / 60) // FPS
     {
         Console.CursorVisible = false;
         UpdateUITimer = new Timer(Refresh, null, updateInterval, updateInterval);
     }
 
-    static void Refresh(object state)
+    void Refresh(object state)
     {
         lock (UpdateUITimer)
         {
-            Instance.Update();
+            Update();
         }
     }
 
@@ -46,5 +46,11 @@ class FrameMaster
         }
 
         foreach (var f in frames) f.Render();
+    }
+
+    public void Dispose()
+    {
+        UpdateUITimer.Dispose();
+        Console.SetOut(FrameMaster.Out); // Reset console out
     }
 }

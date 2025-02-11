@@ -12,13 +12,15 @@ static partial class Program
     static TextWriter main = Console.Out;
     static TextWriter log = Console.Out;
 
-    static void InitFrames()
+    static FrameMaster InitFrames()
     {
+        var instance = FrameMaster.Instance;
+
         queue = queueFrame = new Frame { Title = "Queue length" };
         main = mainFrame = new Frame { Title = "Main" };
         log = logFrame = new Frame { Title = "Log" };
 
-        FrameMaster.Instance.OnResize += (_, ea) =>
+        instance.OnResize += (_, ea) =>
         {
             var (h, w) = ea;
             const int heightTop = 16;
@@ -28,8 +30,10 @@ static partial class Program
         };
 
         Console.WriteLine();
-
         Console.SetOut(main);
-        FrameMaster.Run();
+
+        instance.Run();
+
+        return instance;
     }
 }

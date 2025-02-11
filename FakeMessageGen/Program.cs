@@ -98,7 +98,7 @@ static partial class Program
         {
             Console.WriteLine("\e[?1049h");
 
-            InitFrames();
+            using var f = InitFrames();
 
             Console.WriteLine($"""
                                         Using: {transportDefinition.GetType().Name}
