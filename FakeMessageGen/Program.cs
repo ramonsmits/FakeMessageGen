@@ -134,7 +134,7 @@ static partial class Program
         }
         finally
         {
-            Console.WriteLine("\e[?1049l"); // Restore main buffer
+            Console.Write("\e[?1049l\e[!p\e[m");
             Console.WriteLine("Fin!");
             Console.ReadLine();
         }
