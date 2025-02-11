@@ -1,7 +1,9 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Globalization;
-using System.IO;
+using System.Linq;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -83,16 +85,32 @@ static partial class Program
                                  connectionstring:
                                  
                                      The connection string to use for the destination.
+                               
+                                     By default the app will detect connection strings from the envvars and present a
+                                     list of transport configuration to choose from when launched.
                                  
                                      Will probe the format to check if it can assume RabbitMQ, Azure Service Bus,
                                      or Learning transport.
+                                     
+                                     Azure Service Bus:
+
+                                        Are expected to start with "Endpoint="
+                               
+                                     RabbitMQ:
+                                     
+                                        Are expected to start with "host="
+                               
+                                     Learning:
+                                     
+                                        Are expected to start with `/` (linux path) or contains `:\` (windows drive)
+
                                """);
             return;
         }
 
         CreateRateGate();
 
-        if (SetupTransport()) return;
+        if (!SetupTransport()) return;
 
         try
         {
@@ -163,8 +181,50 @@ static partial class Program
         await Task.WhenAll(activeTasks.Keys);
     }
 
+    enum Transports
+    {
+        AzureServiceBus,
+        RabbitMQ,
+        Learning
+    }
+
     static bool SetupTransport()
     {
+        var envvars = Environment.GetEnvironmentVariables();
+
+        if (string.IsNullOrWhiteSpace(ConnectionString))
+        {
+            List<(string key, Transports type, string v)> transports = new();
+
+            foreach (var e in envvars.Cast<DictionaryEntry>())
+            {
+                var k = (string)e.Key;
+                var isConnectionString = k.Contains("CONNECTIONSTRING", StringComparison.OrdinalIgnoreCase);
+                var v = (string)e.Value;
+                if ((v.StartsWith("/") || v.Contains(":\\")) && isConnectionString) transports.Add((k, Transports.Learning, v));
+                if (v.StartsWith("Endpoint")) transports.Add((k, Transports.AzureServiceBus, v));
+                if (v.StartsWith("host=")) transports.Add((k, Transports.RabbitMQ, v));
+            }
+
+            if (transports.Count == 0)
+                return false;
+
+            Console.WriteLine("Select transport configuration:\n\n");
+
+            for (int i = 0; i < transports.Count; i++)
+            {
+                var cyan = Ansi.GetAnsiColor(ConsoleColor.DarkCyan);
+                Console.WriteLine($"  [{cyan}{i}{Ansi.Reset}] {transports[i].key}: {transports[i].type}");
+            }
+
+            Console.Write("\nOption: ");
+
+            var x = int.Parse(Console.ReadLine());
+
+            ConnectionString = transports[x].v;
+            ConnectionString = Environment.ExpandEnvironmentVariables(ConnectionString);
+        }
+
         if (!string.IsNullOrEmpty(ConnectionString))
         {
             if (ConnectionString.StartsWith("Endpoint"))
@@ -183,7 +243,6 @@ static partial class Program
             return true;
         }
 
-        var envvars = Environment.GetEnvironmentVariables();
 
         var hasASB = envvars.Contains("CONNECTIONSTRING_AZURESERVICEBUS");
         var hasRMQ = envvars.Contains("CONNECTIONSTRING_RABBITMQ");
@@ -210,26 +269,23 @@ static partial class Program
 
         static void SetupLearning()
         {
-            var connectionString = Environment.ExpandEnvironmentVariables(Environment.GetEnvironmentVariable("CONNECTIONSTRING_LEARNING")!);
             transportDefinition = new LearningTransport
             {
-                StorageDirectory = connectionString
+                StorageDirectory = ConnectionString
             };
-            queueMetrics = new LearningMetrics(connectionString);
+            queueMetrics = new LearningMetrics(ConnectionString);
         }
 
         static void SetupRabbitMQ()
         {
-            var connectionString = Environment.ExpandEnvironmentVariables(Environment.GetEnvironmentVariable("CONNECTIONSTRING_AZURESERVICEBUS")!);
-            transportDefinition = new RabbitMQTransport(RoutingTopology.Conventional(QueueType.Quorum), connectionString);
-            queueMetrics = RabbitMqMetrics.Parse(connectionString);
+            transportDefinition = new RabbitMQTransport(RoutingTopology.Conventional(QueueType.Quorum), ConnectionString);
+            queueMetrics = RabbitMqMetrics.Parse(ConnectionString);
         }
 
         static void SetupAzureServiceBus()
         {
-            var connectionString = Environment.ExpandEnvironmentVariables(Environment.GetEnvironmentVariable("CONNECTIONSTRING_AZURESERVICEBUS")!);
-            transportDefinition = new AzureServiceBusTransport(connectionString);
-            queueMetrics = new ServiceBusMetrics(connectionString);
+            transportDefinition = new AzureServiceBusTransport(ConnectionString);
+            queueMetrics = new ServiceBusMetrics(ConnectionString);
         }
     }
 
