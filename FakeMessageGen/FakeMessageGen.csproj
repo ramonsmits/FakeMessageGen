@@ -8,6 +8,10 @@
 
     <ItemGroup>
         <PackageReference Include="Azure.Messaging.ServiceBus" Version="7.*"/>
+        <PackageReference Include="MinVer" Version="6.0.0">
+          <PrivateAssets>all</PrivateAssets>
+          <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+        </PackageReference>
         <PackageReference Include="NServiceBus.Raw" Version="4.*"/>
         <PackageReference Include="NServiceBus.Transport.AzureServiceBus" Version="3.*"/>
         <PackageReference Include="NServiceBus.RabbitMQ" Version="8.*"/>
@@ -24,7 +28,6 @@
         <TargetFramework>net9.0</TargetFramework>
         <PackageId>NBraceIT.FakeMessageGen</PackageId>
         <ToolCommandName>fakemessagegen</ToolCommandName>
-        <PackageVersion>1.2.0</PackageVersion>
         <PackageOutputPath>./nupkg</PackageOutputPath>
         <PackAsTool>true</PackAsTool>
         <PackageLicenseExpression>AGPL-3.0-only</PackageLicenseExpression>
