@@ -24,7 +24,7 @@
         <TargetFramework>net9.0</TargetFramework>
         <PackageId>NBraceIT.FakeMessageGen</PackageId>
         <ToolCommandName>fakemessagegen</ToolCommandName>
-        <PackageVersion>1.1.0</PackageVersion>
+        <PackageVersion>1.2.0</PackageVersion>
         <PackageOutputPath>./nupkg</PackageOutputPath>
         <PackAsTool>true</PackAsTool>
         <PackageLicenseExpression>AGPL-3.0-only</PackageLicenseExpression>
