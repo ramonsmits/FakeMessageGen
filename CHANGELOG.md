@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [?] - ?
 
+- ✨ Migrated from NServiceBus.Raw to NServiceBus 9.x transport seam
 - 🐛 List started at 11, accidentally added 11 instead of 1
 
 ## [1.2.0] - 2025-02-14

@@ -9,7 +9,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using NServiceBus;
 using NServiceBus.Logging;
-using NServiceBus.Raw;
 using NServiceBus.Routing;
 using NServiceBus.Transport;
 
@@ -28,7 +27,7 @@ static partial class Program
 
     static readonly SemaphoreSlim concurrency = new(MaxConcurrency);
     static RateGate rateLimiter;
-    static IReceivingRawEndpoint sender;
+    static IMessageDispatcher sender;
     static State state = State.Running;
 
     static TransportDefinition transportDefinition;
@@ -135,11 +134,18 @@ static partial class Program
             AppDomain.CurrentDomain.UnhandledException += (o, ea) => main.WriteLine(Ansi.GetAnsiColor(ConsoleColor.Magenta) + DateTime.UtcNow + " UnhandledException: " + ((Exception)ea.ExceptionObject).Message + Ansi.Reset);
             AppDomain.CurrentDomain.FirstChanceException += (o, ea) => main.WriteLine(Ansi.GetAnsiColor(ConsoleColor.DarkCyan) + DateTime.UtcNow + " FirstChanceException: " + ea.Exception.Message);
 
-            var senderConfig = RawEndpointConfiguration.CreateSendOnly(endpointName: "EndpointName", transportDefinition);
+            var hostSettings = new HostSettings(
+                name: string.Empty,
+                hostDisplayName: string.Empty,
+                startupDiagnostic: new StartupDiagnosticEntries(),
+                criticalErrorAction: null,
+                setupInfrastructure: false
+            );
+
+            var infrastructure = await transportDefinition.Initialize(hostSettings, [], []);
+            sender = infrastructure.Dispatcher;
 
             var queueLengthTask = CheckQueue(ShutdownCancellationTokenSource.Token);
-
-            sender = await RawEndpoint.Start(senderConfig);
 
             var sendLoopTask = SendLoop(ShutdownCancellationTokenSource.Token);
 
@@ -147,9 +153,16 @@ static partial class Program
             await ShutdownTcs.Task;
 
             Console.WriteLine("Waiting max 5 seconds for running tasks to complete...");
+
+            async Task Teardown()
+            {
+                await Task.WhenAll(sendLoopTask, queueLengthTask);
+                await infrastructure.Shutdown();
+            }
+
             await Task.WhenAny(
                 Task.Delay(TimeSpan.FromSeconds(5)),
-                Task.WhenAll(sendLoopTask, queueLengthTask)
+                Teardown()
             );
         }
         finally
