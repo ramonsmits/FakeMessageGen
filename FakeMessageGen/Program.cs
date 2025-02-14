@@ -93,7 +93,7 @@ static partial class Program
                                      or Learning transport.
                                      
                                      Azure Service Bus:
-
+                               
                                         Are expected to start with "Endpoint="
                                
                                      RabbitMQ:
@@ -214,14 +214,16 @@ static partial class Program
             for (int i = 0; i < transports.Count; i++)
             {
                 var cyan = Ansi.GetAnsiColor(ConsoleColor.DarkCyan);
-                Console.WriteLine($"  [{cyan}{i}{Ansi.Reset}] {transports[i].key}: {transports[i].type}");
+                Console.WriteLine($"  [{cyan}{i + 11}{Ansi.Reset}] {transports[i].key}: {transports[i].type}");
             }
 
             Console.Write("\nOption: ");
 
-            var x = int.Parse(Console.ReadLine());
+            var indexStartAt1 = transports.Count < 10
+                ? int.Parse(Console.ReadKey().KeyChar.ToString())
+                : int.Parse(Console.ReadLine());
 
-            ConnectionString = transports[x].v;
+            ConnectionString = transports[--indexStartAt1].v;
             ConnectionString = Environment.ExpandEnvironmentVariables(ConnectionString);
         }
 
