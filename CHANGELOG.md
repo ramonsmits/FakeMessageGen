@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [?] - ?
+
+- 🐛 List started at 11, accidentally added 11 instead of 1
+
 ## [1.2.0] - 2025-02-14
 
 - ✨ Connection string options start at 1 instead of 0 making it more natural for keyboard layout

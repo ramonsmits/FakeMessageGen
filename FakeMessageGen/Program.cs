@@ -216,7 +216,7 @@ static partial class Program
             for (int i = 0; i < transports.Count; i++)
             {
                 var cyan = Ansi.GetAnsiColor(ConsoleColor.DarkCyan);
-                Console.WriteLine($"  [{cyan}{i + 11}{Ansi.Reset}] {transports[i].key}: {transports[i].type}");
+                Console.WriteLine($"  [{cyan}{i + 1}{Ansi.Reset}] {transports[i].key}: {transports[i].type}");
             }
 
             Console.Write("\nOption: ");
