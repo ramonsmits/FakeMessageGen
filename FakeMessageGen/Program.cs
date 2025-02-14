@@ -39,6 +39,8 @@ static partial class Program
 
     static async Task Main(string[] args)
     {
+        await VersionCheck.Report();
+
         SetupEnvironment();
 
         try
