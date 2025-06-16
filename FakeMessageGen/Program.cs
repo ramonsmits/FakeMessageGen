@@ -224,6 +224,8 @@ static partial class Program
                 ? int.Parse(Console.ReadKey().KeyChar.ToString())
                 : int.Parse(Console.ReadLine());
 
+            Console.WriteLine();
+
             ConnectionString = transports[--indexStartAt1].v;
             ConnectionString = Environment.ExpandEnvironmentVariables(ConnectionString);
         }
