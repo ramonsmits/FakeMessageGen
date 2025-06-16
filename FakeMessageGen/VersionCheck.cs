@@ -11,8 +11,8 @@ using NuGet.Versioning;
 static class VersionCheck
 {
     const string PackageId = "nbraceit.fakemessagegen";
-    public static readonly SemanticVersion Version = SemanticVersion.Parse(Assembly.GetExecutingAssembly().GetCustomAttributes<AssemblyInformationalVersionAttribute>().Single().InformationalVersion);
-    public static async Task Report()
+    static readonly SemanticVersion Version = SemanticVersion.Parse(Assembly.GetExecutingAssembly().GetCustomAttributes<AssemblyInformationalVersionAttribute>().Single().InformationalVersion);
+    public static async Task<string> Report()
     {
         try
         {
@@ -22,10 +22,12 @@ static class VersionCheck
             using var cts = new CancellationTokenSource(2000);
             var versions = await resourceFeedz.GetAllVersionsAsync(PackageId, cache, NullLogger.Instance, cts.Token);
             var latest = versions.Where(v => v > Version && !v.IsPrerelease).Max();
-            if (Version < latest) Console.WriteLine($"\n{Ansi.Underline}{Ansi.GetAnsiColor(ConsoleColor.Yellow)}New version available: {latest}{Ansi.Reset} (current {Version})\n");
+            if (Version < latest)
+                return $"{Ansi.Underline}{Ansi.GetAnsiColor(ConsoleColor.Yellow)}New version available: {latest}{Ansi.Reset}, current {Version}\n";
         }
         catch
         {
         }
+        return $"{Version}";
     }
 }

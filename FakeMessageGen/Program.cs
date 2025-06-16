@@ -38,9 +38,9 @@ static partial class Program
 
     static async Task Main(string[] args)
     {
+        var versionCheck = VersionCheck.Report();
         try
         {
-            await VersionCheck.Report();
 
             SetupEnvironment();
 
@@ -153,7 +153,8 @@ static partial class Program
         }
         finally
         {
-            Console.WriteLine($"Fin! ({VersionCheck.Version})");
+            var versionInfo = await versionCheck;
+            Console.WriteLine($"Fin! ({versionInfo})");
         }
     }
 
