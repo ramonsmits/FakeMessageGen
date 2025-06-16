@@ -15,7 +15,7 @@ public class FakeMessageGenerator
     static string RandomString(int length, string chars)
     {
         return new string(Enumerable.Repeat(chars, length)
-            .Select(s => s[StaticRandom.Next(s.Length)]).ToArray());
+            .Select(s => s[Random.Shared.Next(s.Length)]).ToArray());
     }
 
     const int BodySizeMax = 200;
@@ -40,7 +40,7 @@ public class FakeMessageGenerator
 
         for (int i = 0; i < count; i++)
         {
-            items.Add(RandomString(StaticRandom.Next(min, max), chars));
+            items.Add(RandomString(Random.Shared.Next(min, max), chars));
         }
 
         return items;
@@ -50,9 +50,9 @@ public class FakeMessageGenerator
     {
         var id = Guid.NewGuid().ToString();
 
-        int length = StaticRandom.Next(BodySizeMax);
+        int length = Random.Shared.Next(BodySizeMax);
         var body = new byte[length];
-        int start = StaticRandom.Next(RandomData.Length - length);
+        int start = Random.Shared.Next(RandomData.Length - length);
         Array.Copy(RandomData, start, body, 0, length);
 
         var now = DateTime.UtcNow;
@@ -63,32 +63,32 @@ public class FakeMessageGenerator
             [Headers.MessageId] = id,
             [Headers.ContentType] = " text/plain",
             //[Headers.ContentType] = " application/octet-stream",
-            [Headers.EnclosedMessageTypes] = "random_" + StaticRandom.Next(EnclosedMessageTypesMax),
-            [Headers.CorrelationId] = now.ToString("yyyy-M-dThh") + "_" + StaticRandom.Next(CorrelationIdMax),
-            [Headers.ConversationId] = now.ToString("yyyy-M-dThh") + "_" + StaticRandom.Next(ConversationIdMax),
+            [Headers.EnclosedMessageTypes] = "random_" + Random.Shared.Next(EnclosedMessageTypesMax),
+            [Headers.CorrelationId] = now.ToString("yyyy-M-dThh") + "_" + Random.Shared.Next(CorrelationIdMax),
+            [Headers.ConversationId] = now.ToString("yyyy-M-dThh") + "_" + Random.Shared.Next(ConversationIdMax),
             //[Headers.RelatedTo] = "random",
-            [Headers.MessageIntent] = intents[StaticRandom.Next(3)],
+            [Headers.MessageIntent] = intents[Random.Shared.Next(3)],
             [Headers.TimeSent] = DateTimeOffsetHelper.ToWireFormattedString(now),
-            ["NServiceBus.OriginatingEndpoint"] = "endpoint_" + StaticRandom.Next(OriginatingEndpointMax),
+            ["NServiceBus.OriginatingEndpoint"] = "endpoint_" + Random.Shared.Next(OriginatingEndpointMax),
             ["NServiceBus.OriginatingMachine"] = Environment.MachineName
         };
 
         if (isError)
         {
-            headers["NServiceBus.FailedQ"] = "endpoint_" + StaticRandom.Next(FailedQMax);
-            headers["NServiceBus.ExceptionInfo.ExceptionType"] = RandomExceptionTypes[StaticRandom.Next(RandomExceptionTypes.Count)];
-            headers["NServiceBus.ExceptionInfo.InnerExceptionType"] = RandomExceptionTypes[StaticRandom.Next(RandomExceptionTypes.Count)];
-            headers["NServiceBus.ExceptionInfo.Message"] = RandomExceptionMessages[StaticRandom.Next(RandomExceptionMessages.Count)];
-            headers["NServiceBus.ExceptionInfo.StackTrace"] = RandomExceptionStackTraces[StaticRandom.Next(RandomExceptionStackTraces.Count)];
+            headers["NServiceBus.FailedQ"] = "endpoint_" + Random.Shared.Next(FailedQMax);
+            headers["NServiceBus.ExceptionInfo.ExceptionType"] = RandomExceptionTypes[Random.Shared.Next(RandomExceptionTypes.Count)];
+            headers["NServiceBus.ExceptionInfo.InnerExceptionType"] = RandomExceptionTypes[Random.Shared.Next(RandomExceptionTypes.Count)];
+            headers["NServiceBus.ExceptionInfo.Message"] = RandomExceptionMessages[Random.Shared.Next(RandomExceptionMessages.Count)];
+            headers["NServiceBus.ExceptionInfo.StackTrace"] = RandomExceptionStackTraces[Random.Shared.Next(RandomExceptionStackTraces.Count)];
             //["NServiceBus.ExceptionInfo.HelpLink"] //The exception help link.
             //["NServiceBus.ExceptionInfo.Source"] //The full type name of the InnerException if it exists. It is obtained by calling Exception.InnerException.GetType().FullName.
         }
         else
         {
-            headers["NServiceBus.ProcessingEndpoint"] = "endpoint_" + StaticRandom.Next(100);
+            headers["NServiceBus.ProcessingEndpoint"] = "endpoint_" + Random.Shared.Next(100);
             headers["NServiceBus.ProcessingMachine"] = Environment.MachineName;
             headers["NServiceBus.ProcessingStarted"] = DateTimeOffsetHelper.ToWireFormattedString(now);
-            headers["NServiceBus.ProcessingEnded"] = DateTimeOffsetHelper.ToWireFormattedString(now.AddMilliseconds(StaticRandom.Next(20, 20000)));
+            headers["NServiceBus.ProcessingEnded"] = DateTimeOffsetHelper.ToWireFormattedString(now.AddMilliseconds(Random.Shared.Next(20, 20000)));
         }
 
         return (id, headers, body);
