@@ -29,15 +29,19 @@
         <OutputType>Exe</OutputType>
         <TargetFramework>net9.0</TargetFramework>
         <PackageId>NBraceIT.FakeMessageGen</PackageId>
+        <Description>Generate fake messages to load test ServiceControl instances</Description>
+        <PackageTags>NServiceBus;ServiceControl</PackageTags>
         <ToolCommandName>fakemessagegen</ToolCommandName>
         <PackageOutputPath>./nupkg</PackageOutputPath>
         <PackAsTool>true</PackAsTool>
         <PackageLicenseExpression>AGPL-3.0-only</PackageLicenseExpression>
         <PackageReadmeFile>README.md</PackageReadmeFile>
+        <RepositoryUrl>https://github.com/ramonsmits/FakeMessageGen</RepositoryUrl>
+        <PackageProjectUrl>https://github.com/ramonsmits/FakeMessageGen</PackageProjectUrl>
+        <PackageReleaseNotes>$([System.IO.File]::ReadAllText("$(MSBuildProjectDirectory)/../CHANGELOG.md"))</PackageReleaseNotes>
     </PropertyGroup>
 
     <ItemGroup>
         <None Include="../README.md" Pack="true" PackagePath="/"/>
-        <None Include="../CHANGELOG.md" Pack="true" PackagePath="/"/>
     </ItemGroup>
 </Project>
