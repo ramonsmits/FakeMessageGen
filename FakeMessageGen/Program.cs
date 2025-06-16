@@ -38,137 +38,143 @@ static partial class Program
 
     static async Task Main(string[] args)
     {
-        await VersionCheck.Report();
-
-        SetupEnvironment();
-
         try
         {
-            destination = args[0];
-            isError = bool.Parse(args[1]);
-            if (args.Length > 2) MaxQueueLength = int.Parse(args[2]);
-            if (args.Length > 3) RateLimit = int.Parse(args[3]);
-            if (args.Length > 4) MaxConcurrency = int.Parse(args[4]);
-            if (args.Length > 5) BatchSize = int.Parse(args[5]);
-            if (args.Length > 6) ConnectionString = args[6];
-        }
-        catch
-        {
-            Console.WriteLine($"""
-                               FakeMessagGen.exe destination isError (maxQueueLength) (rateLimit) (maxConcurrency) (batchSize) (connectionstring)
-                               
-                                 destination: 
-                                 
-                                     Queue to send messages to.
-                                 
-                                 isError:
-                                 
-                                     true will generate fake error.
-                                     false will generate fake audit.
-                                 
-                                 maxQueueLength: default {MaxQueueLength}
-                                 
-                                     Will pause seeding message when the queue length exceeds this limit.
-                                 
-                                 rateLimit: default {RateLimit}
-                                 
-                                     Will not generate more messages per second than this limit taking
-                                     batch size into account.
-                                                 
-                                 maxConcurrency: default {MaxConcurrency}
-                                 
-                                     How many concurrency (batch) sends to allow
-                                 
-                                 batchSize: default {BatchSize}
-                                  
-                                     The batch size to use for each batch send operation
-                                 
-                                 connectionstring:
-                                 
-                                     The connection string to use for the destination.
-                               
-                                     By default the app will detect connection strings from the envvars and present a
-                                     list of transport configuration to choose from when launched.
-                                 
-                                     Will probe the format to check if it can assume RabbitMQ, Azure Service Bus,
-                                     or Learning transport.
-                                     
-                                     Azure Service Bus:
-                               
-                                        Are expected to start with "Endpoint="
-                               
-                                     RabbitMQ:
-                                     
-                                        Are expected to start with "host="
-                               
-                                     Learning:
-                                     
-                                        Are expected to start with `/` (linux path) or contains `:\` (windows drive)
+            await VersionCheck.Report();
 
-                               """);
-            return;
-        }
+            SetupEnvironment();
 
-        CreateRateGate();
-
-        if (!SetupTransport()) return;
-
-        try
-        {
-            Console.WriteLine("\e[?1049h");
-
-            using var f = InitFrames();
-
-            Console.WriteLine($"""
-                                        Using: {transportDefinition.GetType().Name}
-                                    RateLimit: {RateLimit:N0}/s
-                                    BatchSize: {BatchSize:N0}
-                                  Destination: {destination}
-                                      IsError: {isError}
-                               MaxQueueLength: {MaxQueueLength:N0}
-                               MaxConcurrency: {MaxConcurrency:N0}
-                               """);
-
-
-            LogManager.UseFactory(new FrameLoggerFactory(logFrame));
-            AppDomain.CurrentDomain.UnhandledException += (o, ea) => main.WriteLine(Ansi.GetAnsiColor(ConsoleColor.Magenta) + DateTime.UtcNow + " UnhandledException: " + ((Exception)ea.ExceptionObject).Message + Ansi.Reset);
-            AppDomain.CurrentDomain.FirstChanceException += (o, ea) => main.WriteLine(Ansi.GetAnsiColor(ConsoleColor.DarkCyan) + DateTime.UtcNow + " FirstChanceException: " + ea.Exception.Message);
-
-            var hostSettings = new HostSettings(
-                name: string.Empty,
-                hostDisplayName: string.Empty,
-                startupDiagnostic: new StartupDiagnosticEntries(),
-                criticalErrorAction: null,
-                setupInfrastructure: false
-            );
-
-            var infrastructure = await transportDefinition.Initialize(hostSettings, [], []);
-            sender = infrastructure.Dispatcher;
-
-            var queueLengthTask = CheckQueue(ShutdownCancellationTokenSource.Token);
-
-            var sendLoopTask = SendLoop(ShutdownCancellationTokenSource.Token);
-
-            Console.WriteLine("Press CTRL+C to exit...");
-            await ShutdownTcs.Task;
-
-            Console.WriteLine("Waiting max 5 seconds for running tasks to complete...");
-
-            async Task Teardown()
+            try
             {
-                await Task.WhenAll(sendLoopTask, queueLengthTask);
-                await infrastructure.Shutdown();
+                destination = args[0];
+                isError = bool.Parse(args[1]);
+                if (args.Length > 2) MaxQueueLength = int.Parse(args[2]);
+                if (args.Length > 3) RateLimit = int.Parse(args[3]);
+                if (args.Length > 4) MaxConcurrency = int.Parse(args[4]);
+                if (args.Length > 5) BatchSize = int.Parse(args[5]);
+                if (args.Length > 6) ConnectionString = args[6];
+            }
+            catch
+            {
+                Console.WriteLine($"""
+                                   FakeMessagGen.exe destination isError (maxQueueLength) (rateLimit) (maxConcurrency) (batchSize) (connectionstring)
+
+                                     destination: 
+                                     
+                                         Queue to send messages to.
+                                     
+                                     isError:
+                                     
+                                         true will generate fake error.
+                                         false will generate fake audit.
+                                     
+                                     maxQueueLength: default {MaxQueueLength}
+                                     
+                                         Will pause seeding message when the queue length exceeds this limit.
+                                     
+                                     rateLimit: default {RateLimit}
+                                     
+                                         Will not generate more messages per second than this limit taking
+                                         batch size into account.
+                                                     
+                                     maxConcurrency: default {MaxConcurrency}
+                                     
+                                         How many concurrency (batch) sends to allow
+                                     
+                                     batchSize: default {BatchSize}
+                                      
+                                         The batch size to use for each batch send operation
+                                     
+                                     connectionstring:
+                                     
+                                         The connection string to use for the destination.
+
+                                         By default the app will detect connection strings from the envvars and present a
+                                         list of transport configuration to choose from when launched.
+                                     
+                                         Will probe the format to check if it can assume RabbitMQ, Azure Service Bus,
+                                         or Learning transport.
+                                         
+                                         Azure Service Bus:
+
+                                            Are expected to start with "Endpoint="
+
+                                         RabbitMQ:
+                                         
+                                            Are expected to start with "host="
+
+                                         Learning:
+                                         
+                                            Are expected to start with `/` (linux path) or contains `:\` (windows drive)
+
+                                   """);
+                return;
             }
 
-            await Task.WhenAny(
-                Task.Delay(TimeSpan.FromSeconds(5)),
-                Teardown()
-            );
+            CreateRateGate();
+
+            if (!SetupTransport()) return;
+
+            try
+            {
+                Console.WriteLine("\e[?1049h");
+
+                using var f = InitFrames();
+
+                Console.WriteLine($"""
+                                            Using: {transportDefinition.GetType().Name}
+                                        RateLimit: {RateLimit:N0}/s
+                                        BatchSize: {BatchSize:N0}
+                                      Destination: {destination}
+                                          IsError: {isError}
+                                   MaxQueueLength: {MaxQueueLength:N0}
+                                   MaxConcurrency: {MaxConcurrency:N0}
+                                   """);
+
+
+                LogManager.UseFactory(new FrameLoggerFactory(logFrame));
+                AppDomain.CurrentDomain.UnhandledException += (o, ea) => main.WriteLine(Ansi.GetAnsiColor(ConsoleColor.Magenta) + DateTime.UtcNow + " UnhandledException: " + ((Exception)ea.ExceptionObject).Message + Ansi.Reset);
+                AppDomain.CurrentDomain.FirstChanceException += (o, ea) => main.WriteLine(Ansi.GetAnsiColor(ConsoleColor.DarkCyan) + DateTime.UtcNow + " FirstChanceException: " + ea.Exception.Message);
+
+                var hostSettings = new HostSettings(
+                    name: string.Empty,
+                    hostDisplayName: string.Empty,
+                    startupDiagnostic: new StartupDiagnosticEntries(),
+                    criticalErrorAction: null,
+                    setupInfrastructure: false
+                );
+
+                var infrastructure = await transportDefinition.Initialize(hostSettings, [], []);
+                sender = infrastructure.Dispatcher;
+
+                var queueLengthTask = CheckQueue(ShutdownCancellationTokenSource.Token);
+
+                var sendLoopTask = SendLoop(ShutdownCancellationTokenSource.Token);
+
+                Console.WriteLine("Press CTRL+C to exit...");
+                await ShutdownTcs.Task;
+
+                Console.WriteLine("Waiting max 5 seconds for running tasks to complete...");
+
+                async Task Teardown()
+                {
+                    await Task.WhenAll(sendLoopTask, queueLengthTask);
+                    await infrastructure.Shutdown();
+                }
+
+                await Task.WhenAny(
+                    Task.Delay(TimeSpan.FromSeconds(5)),
+                    Teardown()
+                );
+            }
+            finally
+            {
+                Console.Write("\e[?1049l\e[!p\e[m");
+            }
         }
         finally
         {
-            Console.Write("\e[?1049l\e[!p\e[m");
-            Console.WriteLine("Fin!");
+            Console.WriteLine($"Fin! ({VersionCheck.Version})");
         }
     }
 
