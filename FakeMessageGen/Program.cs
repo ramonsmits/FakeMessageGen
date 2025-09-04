@@ -115,9 +115,11 @@ static partial class Program
                 AppDomain.CurrentDomain.UnhandledException += (o, ea) => main.WriteLine(Ansi.GetAnsiColor(ConsoleColor.Magenta) + DateTime.UtcNow + " UnhandledException: " + ((Exception)ea.ExceptionObject).Message + Ansi.Reset);
                 AppDomain.CurrentDomain.FirstChanceException += (o, ea) => main.WriteLine(Ansi.GetAnsiColor(ConsoleColor.DarkCyan) + DateTime.UtcNow + " FirstChanceException: " + ea.Exception.Message);
 
+                var queue = "FakeMessageGen";
+
                 var hostSettings = new HostSettings(
-                    name: string.Empty,
-                    hostDisplayName: string.Empty,
+                    name: queue,
+                    hostDisplayName: queue,
                     startupDiagnostic: new StartupDiagnosticEntries(),
                     criticalErrorAction: null,
                     setupInfrastructure: false
