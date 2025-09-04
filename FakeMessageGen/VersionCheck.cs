@@ -23,7 +23,7 @@ static class VersionCheck
             var versions = await resourceFeedz.GetAllVersionsAsync(PackageId, cache, NullLogger.Instance, cts.Token);
             var latest = versions.Where(v => v > Version && !v.IsPrerelease).Max();
             if (Version < latest)
-                return $"{Ansi.Underline}{Ansi.GetAnsiColor(ConsoleColor.Yellow)}New version available: {latest}{Ansi.Reset}, current {Version}\n";
+                return $"{Ansi.Underline}{Ansi.GetAnsiColor(ConsoleColor.Yellow)}New version available: {latest}{Ansi.Reset}, current {Version}";
         }
         catch
         {
