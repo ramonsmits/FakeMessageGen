@@ -36,12 +36,12 @@ class RabbitMqMetrics : IQueueMetrics
         };
     }
 
-    public Task<long> GetQueueLengthAsync(string queueName)
+    public async Task<long> GetQueueLengthAsync(string queueName)
     {
-        using var connection = _factory.CreateConnection();
-        using var channel = connection.CreateModel();
-
-        return Task.FromResult((long)channel.QueueDeclarePassive(queueName).MessageCount);
+        await using var connection = await _factory.CreateConnectionAsync();
+        await using var channel = await connection.CreateChannelAsync();
+        var data = await channel.QueueDeclarePassiveAsync(queueName);
+        return data.MessageCount;
     }
 
     private static Dictionary<string, string> ParseRabbitMqConnectionString(string connectionString)
