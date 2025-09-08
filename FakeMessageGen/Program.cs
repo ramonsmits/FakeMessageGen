@@ -199,7 +199,7 @@ static partial class Program
         {
             List<(string key, Transports type, string v)> transports = new();
 
-            foreach (var e in envvars.Cast<DictionaryEntry>())
+            foreach (var e in envvars.Cast<DictionaryEntry>().OrderBy(e => e.Key))
             {
                 var k = (string)e.Key;
                 var isConnectionString = k.Contains("CONNECTIONSTRING", StringComparison.OrdinalIgnoreCase);
