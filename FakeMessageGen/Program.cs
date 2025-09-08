@@ -291,7 +291,7 @@ static partial class Program
 
         static void SetupAzureServiceBus()
         {
-            transportDefinition = new AzureServiceBusTransport(ConnectionString);
+            transportDefinition = new AzureServiceBusTransport(ConnectionString, TopicTopology.Default);
             queueMetrics = new ServiceBusMetrics(ConnectionString);
         }
     }
