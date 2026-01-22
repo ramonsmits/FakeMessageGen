@@ -2,7 +2,15 @@
   "profiles": {
     "FakeMessageGen": {
       "commandName": "Project",
-      "commandLineArgs": "audit false"
+      "commandLineArgs": ""
+    },
+    "FakeMessageGen - Audit": {
+      "commandName": "Project",
+      "commandLineArgs": "audit false 1000 10"
+    },
+    "FakeMessageGen - Error": {
+      "commandName": "Project",
+      "commandLineArgs": "error true 1 0.25 1 1"
     }
   }
 }
