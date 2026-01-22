@@ -104,7 +104,7 @@ static partial class Program
 
                 Console.WriteLine($"""
                                             Using: {transportDefinition.GetType().Name}
-                                        RateLimit: {RateLimit:N0}/s
+                                        RateLimit: {RateLimit:N2}/s
                                         BatchSize: {BatchSize:N0}
                                       Destination: {destination}
                                           IsError: {isError}
