@@ -17,15 +17,15 @@ static partial class Program
     static string destination;
     static bool isError;
 
-    static int MaxQueueLength = 100000;
-    static int RateLimit = 5000;
+    static int MaxQueueLength = 10000;
+    static float RateLimit = 5000;
     static int MaxConcurrency = 100;
     static int BatchSize = 16;
     private static string ConnectionString;
 
     static readonly TimeSpan QueryDelayInterval = TimeSpan.FromSeconds(2);
 
-    static readonly SemaphoreSlim concurrency = new(MaxConcurrency);
+    static SemaphoreSlim concurrency;
     static RateGate rateLimiter;
     static IMessageDispatcher sender;
     static State state = State.Running;
@@ -41,7 +41,6 @@ static partial class Program
         var versionCheck = VersionCheck.Report();
         try
         {
-
             SetupEnvironment();
 
             try
@@ -49,7 +48,7 @@ static partial class Program
                 destination = args[0];
                 isError = bool.Parse(args[1]);
                 if (args.Length > 2) MaxQueueLength = int.Parse(args[2]);
-                if (args.Length > 3) RateLimit = int.Parse(args[3]);
+                if (args.Length > 3) RateLimit = float.Parse(args[3]);
                 if (args.Length > 4) MaxConcurrency = int.Parse(args[4]);
                 if (args.Length > 5) BatchSize = int.Parse(args[5]);
                 if (args.Length > 6) ConnectionString = args[6];
@@ -89,6 +88,9 @@ static partial class Program
                                    """);
                 return;
             }
+
+            _provider = new(BatchSize, CreateOperation);
+            concurrency = new(MaxConcurrency);
 
             CreateRateGate();
 
@@ -172,10 +174,17 @@ static partial class Program
 
             async void Do()
             {
-                var t = Send(isError);
-                activeTasks.TryAdd(t, 0);
-                await t;
-                activeTasks.TryRemove(t, out _);
+                try
+                {
+                    var t = Send(isError);
+                    activeTasks.TryAdd(t, 0);
+                    await t;
+                    activeTasks.TryRemove(t, out _);
+                }
+                catch (Exception e)
+                {
+                    Console.WriteLine(e);
+                }
             }
 
             Do();
@@ -204,7 +213,7 @@ static partial class Program
                 var k = (string)e.Key;
                 var isConnectionString = k.Contains("CONNECTIONSTRING", StringComparison.OrdinalIgnoreCase);
                 var v = (string)e.Value;
-                if ((v.StartsWith("/") || v.Contains(":\\")) && isConnectionString) transports.Add((k, Transports.Learning, v));
+                if ((v.StartsWith('/') || v.Contains(":\\")) && isConnectionString) transports.Add((k, Transports.Learning, v));
                 if (v.StartsWith("Endpoint")) transports.Add((k, Transports.AzureServiceBus, v));
                 if (v.StartsWith("host=")) transports.Add((k, Transports.RabbitMQ, v));
             }
@@ -224,7 +233,7 @@ static partial class Program
 
             var indexStartAt1 = transports.Count < 10
                 ? int.Parse(Console.ReadKey().KeyChar.ToString())
-                : int.Parse(Console.ReadLine());
+                : int.Parse(Console.ReadLine()!);
 
             Console.WriteLine();
 
@@ -238,7 +247,7 @@ static partial class Program
             {
                 SetupAzureServiceBus();
             }
-            else if (ConnectionString.StartsWith("/") || ConnectionString.Contains(":\\"))
+            else if (ConnectionString.StartsWith('/') || ConnectionString.Contains(":\\"))
             {
                 SetupLearning();
             }
@@ -305,7 +314,7 @@ static partial class Program
         CultureInfo.CurrentCulture = customCulture;
         CultureInfo.CurrentUICulture = customCulture;
 
-        Console.CancelKeyPress += (sender, e) =>
+        Console.CancelKeyPress += (_, e) =>
         {
             e.Cancel = true;
             ShutdownTcs.TrySetResult(null);
@@ -317,13 +326,20 @@ static partial class Program
     {
         var batchesPerSec = RateLimit / BatchSize; // 6 (integer division)
         var windowMs = 1000.0 / batchesPerSec * RateLimit / BatchSize;
-        var timeUnit = TimeSpan.FromMilliseconds(windowMs);
-        rateLimiter = new(batchesPerSec, timeUnit);
+
+        var f = 1f;
+        if (batchesPerSec < 1)
+        {
+            f /= batchesPerSec;
+            batchesPerSec = 1;
+        }
+
+        var timeUnit = TimeSpan.FromMilliseconds(f * windowMs);
+
+        rateLimiter = new((int)batchesPerSec, timeUnit);
     }
 
-    static readonly FastArrayProvider<TransportOperation> _provider =
-        new(BatchSize, () => CreateOperation());
-
+    static FastArrayProvider<TransportOperation> _provider;
 
     static async Task Send(bool isError)
     {
@@ -338,7 +354,7 @@ static partial class Program
         catch (Exception ex)
         {
             Metrics.FaultsAdd(1);
-            log.WriteLine(DateTime.UtcNow + " Send error: " + ex.Message);
+            await log.WriteLineAsync(DateTime.UtcNow + " Send error: " + ex.Message);
         }
         finally
         {
@@ -363,7 +379,7 @@ static partial class Program
             {
                 var queueLength = await queueMetrics.GetQueueLengthAsync(destination);
                 var rates = Metrics.SendsAggregator.GetRates();
-                queue.WriteLine(
+                await queue.WriteLineAsync(
                     $"{DateTime.Now} [queued: {queueLength,10:N0}" +
                     $" Rates/sec [now:{rates.CurrentPerSecond,8:F1}/s]" +
                     $" [10s:{rates.LastTenSecondsPerSecond,8:F1}/s]" +
@@ -380,10 +396,10 @@ static partial class Program
 
                     if (result == State.Running)
                     {
-                        queue.WriteLine($"{State.Paused} until under {MaxQueueLength}");
+                        await queue.WriteLineAsync($"{State.Paused} until under {MaxQueueLength}");
                         for (var x = 0; x < MaxConcurrency; x++)
                         {
-                            concurrency.Wait();
+                            await concurrency.WaitAsync(cancellationToken);
                         }
                     }
                 }
@@ -394,14 +410,14 @@ static partial class Program
 
                     if (result == State.Paused)
                     {
-                        queue.WriteLine($"{State.Running} until above {MaxQueueLength}");
+                        await queue.WriteLineAsync($"{State.Running} until above {MaxQueueLength}");
                         concurrency.Release(MaxConcurrency);
                     }
                 }
 
                 await Task
                     .Delay(QueryDelayInterval, cancellationToken)
-                    .ContinueWith(t => Task.CompletedTask, TaskContinuationOptions.ExecuteSynchronously);
+                    .ContinueWith(_ => Task.CompletedTask, TaskContinuationOptions.ExecuteSynchronously);
             }
             catch (Exception e)
             {
