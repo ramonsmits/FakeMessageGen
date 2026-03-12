@@ -16,7 +16,7 @@
         <PackageReference Include="NServiceBus.Transport.AzureServiceBus" Version="5.1.2" />
         <PackageReference Include="NServiceBus.RabbitMQ" Version="10.1.7" />
         <PackageReference Include="NuGet.Protocol" Version="7.0.1" />
-        <PackageReference Include="NuGet.Versioning" Version="7.0.1" />
+        <PackageReference Include="NuGet.Versioning" Version="7.3.0" />
     </ItemGroup>
 
     <ItemGroup>
