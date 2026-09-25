@@ -16,6 +16,7 @@ Legend:
 
 ## [Unreleased]
 
+- ✨ The NuGet package now embeds an SPDX Software Bill of Materials (`_manifest/spdx_2.2/manifest.spdx.json`) listing all bundled dependencies, for supply-chain auditing
 - 📦 Upgraded MinVer from 7.0.0 to 8.0.0
 - 📦 Upgraded NuGet.Protocol from 7.3.1 to 7.9.0
 - 📦 Upgraded NuGet.Versioning from 7.3.1 to 7.9.0

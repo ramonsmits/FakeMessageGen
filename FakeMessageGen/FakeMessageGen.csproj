@@ -30,6 +30,7 @@
           <PrivateAssets>all</PrivateAssets>
           <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
+        <PackageReference Include="Microsoft.Sbom.Targets" Version="4.1.13" PrivateAssets="all" />
         <PackageReference Include="NServiceBus" Version="10.2.9"/>
         <PackageReference Include="NServiceBus.Transport.AzureServiceBus" Version="6.5.0" />
         <PackageReference Include="NServiceBus.RabbitMQ" Version="11.2.1" />
@@ -62,6 +63,8 @@
         <PackAsTool>true</PackAsTool>
         <PackageLicenseExpression>AGPL-3.0-only</PackageLicenseExpression>
         <PackageReadmeFile>README.md</PackageReadmeFile>
+        <!-- Embed an SPDX Software Bill of Materials (_manifest/spdx_2.2/) in the package for supply-chain auditing -->
+        <GenerateSBOM>true</GenerateSBOM>
         <RepositoryUrl>https://github.com/ramonsmits/FakeMessageGen</RepositoryUrl>
         <PackageProjectUrl>https://github.com/ramonsmits/FakeMessageGen</PackageProjectUrl>
         <PackageReleaseNotes>$([System.IO.File]::ReadAllText("$(MSBuildProjectDirectory)/../CHANGELOG.md"))</PackageReleaseNotes>
@@ -70,4 +73,11 @@
     <ItemGroup>
         <None Include="../README.md" Pack="true" PackagePath="/"/>
     </ItemGroup>
+
+    <!-- Microsoft.Sbom.Targets reads $(Version) during evaluation, before MinVer has computed it; re-read it after MinVer runs -->
+    <Target Name="SetSbomVersionFromMinVer" AfterTargets="MinVer">
+        <PropertyGroup>
+            <SbomGenerationPackageVersion>$(PackageVersion)</SbomGenerationPackageVersion>
+        </PropertyGroup>
+    </Target>
 </Project>
