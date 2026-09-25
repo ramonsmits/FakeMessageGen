@@ -5,36 +5,45 @@ using System.Text;
 //using Microsoft.Azure.Amqp.Framing;
 using NServiceBus.Logging;
 
+/// <summary>
+/// Routes NServiceBus log output to a <see cref="TextWriter"/>: a <see cref="Frame"/> in interactive mode,
+/// plain standard output when the output is redirected.
+/// </summary>
 class FrameLoggerFactory : ILoggerFactory
 {
-    readonly Frame Frame;
+    readonly TextWriter Writer;
+    readonly int MinLevel;
 
-    public FrameLoggerFactory(Frame frame)
+    /// <param name="writer">Destination of the log lines.</param>
+    /// <param name="minLevel">0 = Debug, 1 = Info, 2 = Warn, 3 = Error, 4 = Fatal.</param>
+    public FrameLoggerFactory(TextWriter writer, int minLevel = 0)
     {
-        Frame = frame;
+        Writer = writer;
+        MinLevel = minLevel;
     }
 
     public ILog GetLogger(Type type)
     {
-        return new Logger(Frame, type.Name);
+        return new Logger(Writer, type.Name, MinLevel);
     }
 
     public ILog GetLogger(string name)
     {
-        return new Logger(Frame, name);
+        return new Logger(Writer, name, MinLevel);
     }
 
     class Logger : ILog
     {
-        private const int MinLevel = 0;
+        readonly int MinLevel;
         static readonly Stopwatch start = Stopwatch.StartNew();
-        readonly Frame Frame;
+        readonly TextWriter Writer;
         readonly string Name;
 
-        public Logger(Frame frame, string name)
+        public Logger(TextWriter writer, string name, int minLevel)
         {
-            Frame = frame;
+            Writer = writer;
             Name = name;
+            MinLevel = minLevel;
         }
 
         public void Debug(string message)
@@ -63,8 +72,9 @@ class FrameLoggerFactory : ILoggerFactory
             text += " | ";
             text += string.Format(message, args);
             if (ex != null) text += ex.Message;
+            text += Ansi.Reset;
 
-            Frame.WriteLine(text);
+            Writer.WriteLine(text);
         }
 
         public void Debug(string message, Exception exception)
@@ -137,10 +147,10 @@ class FrameLoggerFactory : ILoggerFactory
             WL(4, null, format, args);
         }
 
-        public bool IsDebugEnabled => true;
-        public bool IsInfoEnabled => true;
-        public bool IsWarnEnabled => true;
-        public bool IsErrorEnabled => true;
-        public bool IsFatalEnabled => true;
+        public bool IsDebugEnabled => MinLevel <= 0;
+        public bool IsInfoEnabled => MinLevel <= 1;
+        public bool IsWarnEnabled => MinLevel <= 2;
+        public bool IsErrorEnabled => MinLevel <= 3;
+        public bool IsFatalEnabled => MinLevel <= 4;
     }
 }

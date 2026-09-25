@@ -83,12 +83,49 @@ FakeMessagGen.exe destination isError [maxQueueLength] [rateLimit] [maxConcurren
             MSMQ              — "msmq" (Windows only, destination can be queue@machine)
 
 Tip: If you omit connectionString, it will try to resolve it from env or config.
+
+Output is a full-screen UI when attached to a terminal that supports ANSI escape sequences,
+and plain lines (one queue length and rate line every 2s)
+when stdout is redirected or the console has no ANSI support (legacy Windows console).
+Set FAKEMESSAGEGEN_PLAIN=1 to force plain lines.
 ```
 
 > The destination queue is never created by this tool: the transport is initialised with no receivers
 > and no sending addresses, and MSMQ additionally runs with `CreateQueues = false`. Start the endpoint
 > that owns the queue first — with ServiceControl that means running its setup so the `audit` (or
 > `error`) queue exists.
+
+## Output
+
+The tool has two output modes and picks one at startup:
+
+| Mode | When | What you get |
+|------|------|--------------|
+| Interactive | stdout is a terminal that renders ANSI escape sequences | Full-screen UI with a main, queue length and log frame, updated live |
+| Plain | stdout is redirected (file, pipe, scheduled task, service, CI, `Start-Process -RedirectStandardOutput`), the console has no ANSI support, or `FAKEMESSAGEGEN_PLAIN=1` is set | Startup settings, then one line every 2 seconds with the queue length and send rates, plus NServiceBus log output at Info level and above. No escape sequences |
+
+Plain output looks like this:
+
+```
+         Using: LearningTransport
+     RateLimit: 200.00/s
+     BatchSize: 16
+   Destination: audit
+       IsError: False
+MaxQueueLength: 100,000
+MaxConcurrency: 10
+Press CTRL+C to exit...
+2026-09-25 12:11:15 [queued:        400 Rates/sec [now:   176.0/s] [10s:    22.4/s] [1min:     3.7/s] [10min:     0.4/s] [1hr:     0.1/s] [lifetime:   190.3/s]
+2026-09-25 12:11:17 [queued:        784 Rates/sec [now:   176.0/s] [10s:    60.8/s] [1min:    10.1/s] [10min:     1.0/s] [1hr:     0.2/s] [lifetime:   191.0/s]
+Paused until under 100000
+```
+
+ANSI support on Windows is detected by asking the console to enable virtual terminal processing
+(`SetConsoleMode` with `ENABLE_VIRTUAL_TERMINAL_PROCESSING`). Windows Terminal has it on already; the
+classic console host used by `cmd.exe` on Windows Server supports it since Server 2016 but leaves it off
+until the application turns it on, which the tool now does. If enabling fails (legacy console) the tool
+falls back to plain output instead of printing escape sequences as garbage. On Linux and macOS a
+terminal is assumed to support ANSI unless `TERM` is empty or `dumb`.
 
 ## Transports
 
