@@ -60,7 +60,9 @@ static partial class Program
                                    FakeMessagGen.exe destination isError [maxQueueLength] [rateLimit] [maxConcurrency] [batchSize] [connectionString]
 
                                        destination:
-                                           The queue name to send messages to.
+                                           The queue name to send messages to. It must already exist;
+                                           this tool never creates queues. Start the consuming endpoint
+                                           (for example ServiceControl) first.
 
                                        isError:
                                            true    — generate fake error messages.

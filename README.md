@@ -51,41 +51,44 @@ Every push and pull request is built on Linux and Windows by the [CI workflow](.
 The command line help output:
 
 ```
-FakeMessageGen.exe destination isError (maxQueueLength) (rateLimit) (maxConcurrency) (batchSize) (connectionstring)
-  
-    destination: 
-    
-        Queue to send messages to.
-    
+FakeMessagGen.exe destination isError [maxQueueLength] [rateLimit] [maxConcurrency] [batchSize] [connectionString]
+
+    destination:
+        The queue name to send messages to. It must already exist;
+        this tool never creates queues. Start the consuming endpoint
+        (for example ServiceControl) first.
+
     isError:
-    
-        true will generate fake error.
-        false will generate fake audit.
-    
-    maxQueueLength: default {MaxQueueLength}
-    
-        Will pause seeding message when the queue length exceeds this limit.
-    
-    rateLimit: default {RateLimit}
-    
-        Will not generate more messages per second than this limit taking
-        batch size into account.
-                    
-    maxConcurrency: default {MaxConcurrency}
-    
-        How many concurrency (batch) sends to allow
-    
-    batchSize: default {BatchSize}
-     
-        The batch size to use for each batch send operation
-    
-    connectionstring:
-    
-        The connection string to use for the destination.
-    
-        Will probe the format to check if it can assume RabbitMQ, Azure Service Bus,
-        Learning or MSMQ transport.
+        true    — generate fake error messages.
+        false   — generate fake audit messages.
+
+    maxQueueLength (default 10000):
+        Pauses sending when the destination reaches this depth.
+
+    rateLimit (default 5000):
+        Max messages per second (taking batchSize into account).
+
+    maxConcurrency (default 100):
+        Number of concurrent batches in flight.
+
+    batchSize (default 16):
+        Number of messages per batch send.
+
+    connectionString:
+        Connection to use. If not specified, the tool probes environment and config.
+        Recognized formats:
+            Azure Service Bus — starts with "Endpoint="
+            RabbitMQ          — starts with "host="
+            Learning          — path-like (/foo or C:\foo)
+            MSMQ              — "msmq" (Windows only, destination can be queue@machine)
+
+Tip: If you omit connectionString, it will try to resolve it from env or config.
 ```
+
+> The destination queue is never created by this tool: the transport is initialised with no receivers
+> and no sending addresses, and MSMQ additionally runs with `CreateQueues = false`. Start the endpoint
+> that owns the queue first — with ServiceControl that means running its setup so the `audit` (or
+> `error`) queue exists.
 
 ## Transports
 
