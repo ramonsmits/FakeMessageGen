@@ -20,7 +20,10 @@ class MsmqMetrics : IQueueMetrics
         var objectName = "QUEUE=" + address.FullPath[FormatNamePrefix.Length..];
 
         var properties = new MessagePropertyVariants(PROPID_MGMT_QUEUE_MESSAGE_COUNT + 1, 0);
-        properties.SetNull(PROPID_MGMT_QUEUE_MESSAGE_COUNT);
+        // Declare the property as VT_UI4, not VT_NULL. With VT_NULL, Unlock() takes the "MSMQ self
+        // memory allocation" path and stores the raw pointer, so GetUI4's unbox to int throws
+        // InvalidCastException (IntPtr -> Int32). Declaring the real type makes Unlock() store lVal.
+        properties.SetUI4(PROPID_MGMT_QUEUE_MESSAGE_COUNT, 0);
         var status = UnsafeNativeMethods.MQMgmtGetInfo(machineName, objectName, properties.Lock());
         properties.Unlock();
 

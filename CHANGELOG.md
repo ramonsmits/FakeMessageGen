@@ -16,6 +16,7 @@ Legend:
 
 ## [Unreleased]
 
+- 💥 Fixed the MSMQ queue length check throwing `InvalidCastException` on every call. The backpressure check never completed, so no messages were sent at all and MSMQ was unusable in 2026.1.0
 - ✨ The NuGet package now embeds an SPDX Software Bill of Materials (`_manifest/spdx_2.2/manifest.spdx.json`) listing all bundled dependencies, for supply-chain auditing
 - 📦 Upgraded MinVer from 7.0.0 to 8.0.0
 - 📦 Upgraded NuGet.Protocol from 7.3.1 to 7.9.0
