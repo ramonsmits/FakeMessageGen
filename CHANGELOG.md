@@ -14,6 +14,12 @@ Legend:
 - 📦 = Dependency update
 
 
+## [Unreleased]
+
+- 📦 Upgraded MinVer from 7.0.0 to 8.0.0
+- 📦 Upgraded NuGet.Protocol from 7.3.1 to 7.9.0
+- 📦 Upgraded NuGet.Versioning from 7.3.1 to 7.9.0
+
 ## [2026.1.0] - 2026-09-25
 
 - ✨ Added GitHub Actions: CI build on every push and pull request (Linux and Windows), release workflow that publishes to nuget.org via Trusted Publishing (no stored API key) and creates the GitHub release when a version tag is pushed
