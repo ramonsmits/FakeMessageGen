@@ -16,6 +16,11 @@ Legend:
 
 ## [Unreleased]
 
+- 💥 Fixed the crash `IOException: The handle is invalid` on Windows when stdout is redirected (scheduled task, service, CI, `Start-Process -RedirectStandardOutput`). The tool now prints plain lines instead of the full-screen UI: one queue length and rate line every 2 seconds, without escape sequences
+- 🐛 Fixed garbled output in `cmd.exe` on Windows Server: the tool now enables ANSI escape sequence processing on the Windows console at startup, and falls back to plain output when the console does not support it (legacy console)
+- ✨ Plain output can be forced with `FAKEMESSAGEGEN_PLAIN=1`, and is used automatically when `TERM` is `dumb`
+- ✨ The transport selection menu accepts piped input (reads a line when stdin is redirected instead of a key press)
+
 ## [2026.1.1] - 2026-09-25
 
 - 💥 Fixed the MSMQ queue length check throwing `InvalidCastException` on every call. The backpressure check never completed, so no messages were sent at all and MSMQ was unusable in 2026.1.0

@@ -34,6 +34,11 @@ static partial class Program
     static bool useMsmqBatchTransaction;
     static IQueueMetrics queueMetrics;
 
+    // Full-screen framed UI when attached to a terminal that renders ANSI escape sequences, plain line output when
+    // stdout is redirected (scheduled task, service, CI, Start-Process -RedirectStandardOutput), when the console
+    // does not support escape sequences (legacy Windows console) or when FAKEMESSAGEGEN_PLAIN is set.
+    static bool interactive;
+
     static readonly CancellationTokenSource ShutdownCancellationTokenSource = new();
     static readonly TaskCompletionSource<object> ShutdownTcs = new();
 
@@ -89,6 +94,11 @@ static partial class Program
                                                MSMQ              — "msmq" (Windows only, destination can be queue@machine)
 
                                    Tip: If you omit connectionString, it will try to resolve it from env or config.
+
+                                   Output is a full-screen UI when attached to a terminal that supports ANSI escape sequences,
+                                   and plain lines (one queue length and rate line every {QueryDelayInterval.TotalSeconds:N0}s)
+                                   when stdout is redirected or the console has no ANSI support (legacy Windows console).
+                                   Set FAKEMESSAGEGEN_PLAIN=1 to force plain lines.
                                    """);
                 return;
             }
@@ -102,9 +112,12 @@ static partial class Program
 
             try
             {
-                Console.WriteLine("\e[?1049h");
+                if (interactive)
+                {
+                    Console.WriteLine("\e[?1049h");
+                }
 
-                using var f = InitFrames();
+                using var f = interactive ? InitFrames() : null;
 
                 Console.WriteLine($"""
                                             Using: {transportDefinition.GetType().Name}
@@ -117,9 +130,14 @@ static partial class Program
                                    """);
 
 
-                LogManager.UseFactory(new FrameLoggerFactory(logFrame));
+                // Debug level in the log frame, Info and up when the output is a file so transport chatter does not drown the stat lines
+                LogManager.UseFactory(new FrameLoggerFactory(log, minLevel: interactive ? 0 : 1));
                 AppDomain.CurrentDomain.UnhandledException += (o, ea) => main.WriteLine(Ansi.GetAnsiColor(ConsoleColor.Magenta) + DateTime.UtcNow + " UnhandledException: " + ((Exception)ea.ExceptionObject).Message + Ansi.Reset);
-                AppDomain.CurrentDomain.FirstChanceException += (o, ea) => main.WriteLine(Ansi.GetAnsiColor(ConsoleColor.DarkCyan) + DateTime.UtcNow + " FirstChanceException: " + ea.Exception.Message);
+                if (interactive)
+                {
+                    // Diagnostics only; far too noisy for redirected output
+                    AppDomain.CurrentDomain.FirstChanceException += (o, ea) => main.WriteLine(Ansi.GetAnsiColor(ConsoleColor.DarkCyan) + DateTime.UtcNow + " FirstChanceException: " + ea.Exception.Message);
+                }
 
                 var queue = "FakeMessageGen";
 
@@ -156,7 +174,10 @@ static partial class Program
             }
             finally
             {
-                Console.Write("\e[?1049l\e[!p\e[m");
+                if (interactive)
+                {
+                    Console.Write("\e[?1049l\e[!p\e[m");
+                }
             }
         }
         finally
@@ -238,7 +259,8 @@ static partial class Program
 
             Console.Write("\nOption: ");
 
-            var indexStartAt1 = transports.Count < 10
+            // ReadKey throws when stdin is redirected, ReadLine works with piped input
+            var indexStartAt1 = transports.Count < 10 && !Console.IsInputRedirected
                 ? int.Parse(Console.ReadKey().KeyChar.ToString())
                 : int.Parse(Console.ReadLine()!);
 
@@ -344,6 +366,13 @@ static partial class Program
         customCulture.DateTimeFormat.LongTimePattern = "HH:mm:ss";
         CultureInfo.CurrentCulture = customCulture;
         CultureInfo.CurrentUICulture = customCulture;
+
+        var forcePlain = Environment.GetEnvironmentVariable("FAKEMESSAGEGEN_PLAIN");
+        interactive = !(forcePlain is "1" || bool.TryParse(forcePlain, out var b) && b) && VirtualTerminal.TryEnable();
+        if (!interactive)
+        {
+            Ansi.Disable();
+        }
 
         Console.CancelKeyPress += (_, e) =>
         {

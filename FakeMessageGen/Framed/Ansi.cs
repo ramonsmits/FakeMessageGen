@@ -2,12 +2,23 @@ using System;
 
 static class Ansi
 {
-    public const string Bold = "\e[1m";
-    public const string Underline = "\e[4m";
-    public const string Reversed = "\e[7m";
-    public const string Reset = "\e[0m";
+    public static string Bold { get; private set; } = "\e[1m";
+    public static string Underline { get; private set; } = "\e[4m";
+    public static string Reversed { get; private set; } = "\e[7m";
+    public static string Reset { get; private set; } = "\e[0m";
 
-    public static string GetAnsiColor(ConsoleColor color) => color switch
+    static bool enabled = true;
+
+    /// <summary>
+    /// Turns every escape sequence into an empty string so plain (redirected) output contains no control characters.
+    /// </summary>
+    public static void Disable()
+    {
+        enabled = false;
+        Bold = Underline = Reversed = Reset = string.Empty;
+    }
+
+    public static string GetAnsiColor(ConsoleColor color) => !enabled ? string.Empty : color switch
     {
         ConsoleColor.Black => "\e[30m",
         ConsoleColor.DarkBlue => "\e[34m",
@@ -27,21 +38,4 @@ static class Ansi
         ConsoleColor.White => "\e[97m",
         _ => "\e[0m"
     };
-
-    // Move cursor to specific position (1-based coordinates)
-    //string SetCursorPosition(int row, int col) => $"\e[{row};{col}H";
-
-// Or alternatively you can use these to move relative to current position:
-    const string CursorUp = "\e[1A";    // Up one line
-    const string CursorDown = "\e[1B";   // Down one line
-    const string CursorRight = "\e[1C";  // Right one column
-    const string CursorLeft = "\e[1D";   // Left one column
-
-// Hide/show cursor
-    const string HideCursor = "\e[?25l";
-    const string ShowCursor = "\e[?25h";
-
-// Save and restore position
-    const string SavePosition = "\e[s";
-    const string RestorePosition = "\e[u";
 }
