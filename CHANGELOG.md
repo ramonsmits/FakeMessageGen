@@ -16,6 +16,8 @@ Legend:
 
 ## [Unreleased]
 
+## [2026.1.2] - 2026-09-25
+
 - 💥 Fixed the crash `IOException: The handle is invalid` on Windows when stdout is redirected (scheduled task, service, CI, `Start-Process -RedirectStandardOutput`). The tool now prints plain lines instead of the full-screen UI: one queue length and rate line every 2 seconds, without escape sequences
 - 🐛 Fixed garbled output in `cmd.exe` on Windows Server: the tool now enables ANSI escape sequence processing on the Windows console at startup, and falls back to plain output when the console does not support it (legacy console)
 - ✨ Plain output can be forced with `FAKEMESSAGEGEN_PLAIN=1`, and is used automatically when `TERM` is `dumb`
