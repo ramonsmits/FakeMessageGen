@@ -14,8 +14,9 @@ Legend:
 - 📦 = Dependency update
 
 
-## [Unreleased]
+## [2026.1.0] - 2026-09-25
 
+- ✨ Version numbers now follow `YYYY.RELEASECOUNT.PATCH` (year, release number within the year, hotfix) instead of semantic versioning
 - ✨ Added MSMQ transport support (Windows only) by compiling in the `NServiceBus.Transport.Msmq.Sources` source package. Select it with connection string `msmq` or the `CONNECTIONSTRING_MSMQ` environment variable
 - ✨ Added `nuget.config` with the Particular Software feed as the MSMQ source packages are not published on nuget.org
 - 📦 Upgraded NServiceBus from 9.2.8 to 10.2.9 (required by the MSMQ source package)

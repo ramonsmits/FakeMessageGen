@@ -18,6 +18,16 @@ Update:
 dotnet tool update -g NBraceIT.FakeMessageGen
 ```
 
+## Versioning
+
+Versions follow `YYYY.RELEASECOUNT.PATCH`:
+
+- `YYYY` — the year of the release
+- `RELEASECOUNT` — the release number within that year, starting at 1
+- `PATCH` — hotfix number for that release, starting at 0
+
+For example, `2026.1.0` is the first release of 2026 and `2026.1.1` a hotfix for it. Versions are derived from git tags using [MinVer](https://github.com/adamralph/minver). Releases before 2026.1.0 used semantic versioning (`1.0.0` to `2.0.0`).
+
 ## Help
 
 The command line help output:
