@@ -31,6 +31,7 @@ static partial class Program
     static State state = State.Running;
 
     static TransportDefinition transportDefinition;
+    static bool useMsmqBatchTransaction;
     static IQueueMetrics queueMetrics;
 
     static readonly CancellationTokenSource ShutdownCancellationTokenSource = new();
@@ -83,6 +84,7 @@ static partial class Program
                                                Azure Service Bus — starts with "Endpoint="
                                                RabbitMQ          — starts with "host="
                                                Learning          — path-like (/foo or C:\foo)
+                                               MSMQ              — "msmq" (Windows only, destination can be queue@machine)
 
                                    Tip: If you omit connectionString, it will try to resolve it from env or config.
                                    """);
@@ -197,7 +199,8 @@ static partial class Program
     {
         AzureServiceBus,
         RabbitMQ,
-        Learning
+        Learning,
+        Msmq
     }
 
     static bool SetupTransport()
@@ -216,6 +219,7 @@ static partial class Program
                 if ((v.StartsWith('/') || v.Contains(":\\")) && isConnectionString) transports.Add((k, Transports.Learning, v));
                 if (v.StartsWith("Endpoint")) transports.Add((k, Transports.AzureServiceBus, v));
                 if (v.StartsWith("host=")) transports.Add((k, Transports.RabbitMQ, v));
+                if (v.StartsWith("msmq", StringComparison.OrdinalIgnoreCase) && isConnectionString) transports.Add((k, Transports.Msmq, v));
             }
 
             if (transports.Count == 0)
@@ -226,7 +230,8 @@ static partial class Program
             for (int i = 0; i < transports.Count; i++)
             {
                 var cyan = Ansi.GetAnsiColor(ConsoleColor.DarkCyan);
-                Console.WriteLine($"  [{cyan}{i + 1}{Ansi.Reset}] {transports[i].key}: {transports[i].type}");
+                var unavailable = transports[i].type == Transports.Msmq && !OperatingSystem.IsWindows() ? " (Windows only)" : "";
+                Console.WriteLine($"  [{cyan}{i + 1}{Ansi.Reset}] {transports[i].key}: {transports[i].type}{unavailable}");
             }
 
             Console.Write("\nOption: ");
@@ -245,63 +250,87 @@ static partial class Program
         {
             if (ConnectionString.StartsWith("Endpoint"))
             {
-                SetupAzureServiceBus();
-            }
-            else if (ConnectionString.StartsWith('/') || ConnectionString.Contains(":\\"))
-            {
-                SetupLearning();
-            }
-            else
-            {
-                SetupRabbitMQ();
+                return SetupAzureServiceBus();
             }
 
-            return true;
+            if (ConnectionString.StartsWith("msmq", StringComparison.OrdinalIgnoreCase))
+            {
+                return SetupMsmq();
+            }
+
+            if (ConnectionString.StartsWith('/') || ConnectionString.Contains(":\\"))
+            {
+                return SetupLearning();
+            }
+
+            return SetupRabbitMQ();
         }
 
 
         var hasASB = envvars.Contains("CONNECTIONSTRING_AZURESERVICEBUS");
         var hasRMQ = envvars.Contains("CONNECTIONSTRING_RABBITMQ");
         var hasLearning = envvars.Contains("CONNECTIONSTRING_LEARNING");
+        var hasMsmq = envvars.Contains("CONNECTIONSTRING_MSMQ");
 
         if (hasASB) Console.WriteLine(" [a] Azure ServiceBus");
         if (hasRMQ) Console.WriteLine(" [r] RabbitMQ");
         if (hasLearning) Console.WriteLine(" [l] Learning Transport");
+        if (hasMsmq) Console.WriteLine(" [m] MSMQ");
 
         Console.WriteLine();
 
         var transportSelector = Console.ReadKey(true).KeyChar;
 
-        if (hasASB && transportSelector == 'a') SetupAzureServiceBus();
-        else if (hasRMQ && transportSelector == 'r') SetupRabbitMQ();
-        else if (hasLearning && transportSelector == 'l') SetupLearning();
-        else
-        {
-            Console.WriteLine($"Option {transportSelector} is not supported or not available");
-            return true;
-        }
+        if (hasASB && transportSelector == 'a') return SetupAzureServiceBus();
+        if (hasRMQ && transportSelector == 'r') return SetupRabbitMQ();
+        if (hasLearning && transportSelector == 'l') return SetupLearning();
+        if (hasMsmq && transportSelector == 'm') return SetupMsmq();
 
+        Console.WriteLine($"Option {transportSelector} is not supported or not available");
         return false;
 
-        static void SetupLearning()
+        static bool SetupLearning()
         {
             transportDefinition = new LearningTransport
             {
                 StorageDirectory = ConnectionString
             };
             queueMetrics = new LearningMetrics(ConnectionString);
+            return true;
         }
 
-        static void SetupRabbitMQ()
+        static bool SetupRabbitMQ()
         {
             transportDefinition = new RabbitMQTransport(RoutingTopology.Conventional(QueueType.Quorum), ConnectionString);
             queueMetrics = RabbitMqMetrics.Parse(ConnectionString);
+            return true;
         }
 
-        static void SetupAzureServiceBus()
+        static bool SetupAzureServiceBus()
         {
             transportDefinition = new AzureServiceBusTransport(ConnectionString, TopicTopology.Default);
             queueMetrics = new ServiceBusMetrics(ConnectionString);
+            return true;
+        }
+
+        static bool SetupMsmq()
+        {
+            if (!OperatingSystem.IsWindows())
+            {
+                Console.WriteLine("The MSMQ transport is only available on Windows.");
+                return false;
+            }
+
+            var transport = new MsmqTransport
+            {
+                // Only sending, no need for the MSDTC check that the default TransactionScope mode performs
+                TransportTransactionMode = TransportTransactionMode.ReceiveOnly,
+                CreateQueues = false
+            };
+            useMsmqBatchTransaction = transport.UseTransactionalQueues;
+            transportDefinition = transport;
+            queueMetrics = new MsmqMetrics();
+            return true;
         }
     }
 
@@ -346,10 +375,13 @@ static partial class Program
         var (array, length) = _provider.Rent();
         try
         {
+            var transaction = new TransportTransaction();
+            using var batch = useMsmqBatchTransaction ? MsmqBatchTransaction.Begin(transaction) : null;
             await sender.Dispatch(
                 outgoingMessages: new TransportOperations(array),
-                transaction: new TransportTransaction()
+                transaction: transaction
             );
+            batch?.Commit();
         }
         catch (Exception ex)
         {

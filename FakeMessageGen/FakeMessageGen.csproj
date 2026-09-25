@@ -4,19 +4,44 @@
         <OutputType>Exe</OutputType>
         <TargetFramework>net10.0</TargetFramework>
         <LangVersion>latest</LangVersion>
+        <!-- Required by the Particular.Msmq sources compiled in below -->
+        <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <!-- CA1416 (platform compatibility) is raised by the MSMQ sources; MSMQ is only selected on Windows at runtime -->
+        <NoWarn>$(NoWarn);CA1416</NoWarn>
+    </PropertyGroup>
+
+    <PropertyGroup>
+        <!--
+            The MSMQ transport is distributed as a source package that only targets net10.0-windows. A dotnet tool cannot
+            target a Windows specific framework (NETSDK1146), so the packages are downloaded without NuGet asset selection
+            and their sources are compiled directly into this net10.0 assembly. The MSMQ transport is only usable on Windows.
+        -->
+        <MsmqTransportSourcesVersion>4.0.1</MsmqTransportSourcesVersion>
+        <ParticularMsmqVersion>2.0.0</ParticularMsmqVersion>
+        <MsmqTransportSourcesPath>$(NuGetPackageRoot)nservicebus.transport.msmq.sources/$(MsmqTransportSourcesVersion)/</MsmqTransportSourcesPath>
+        <ParticularMsmqPath>$(NuGetPackageRoot)particular.msmq/$(ParticularMsmqVersion)/</ParticularMsmqPath>
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="Azure.Messaging.ServiceBus" Version="7.20.1"/>
+        <PackageReference Include="Azure.Messaging.ServiceBus" Version="7.21.0"/>
         <PackageReference Include="MinVer" Version="7.0.0">
           <PrivateAssets>all</PrivateAssets>
           <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
         </PackageReference>
-        <PackageReference Include="NServiceBus" Version="9.2.8"/>
-        <PackageReference Include="NServiceBus.Transport.AzureServiceBus" Version="5.1.2" />
-        <PackageReference Include="NServiceBus.RabbitMQ" Version="10.1.7" />
-        <PackageReference Include="NuGet.Protocol" Version="7.3.0" />
+        <PackageReference Include="NServiceBus" Version="10.2.9"/>
+        <PackageReference Include="NServiceBus.Transport.AzureServiceBus" Version="6.5.0" />
+        <PackageReference Include="NServiceBus.RabbitMQ" Version="11.2.1" />
+        <PackageReference Include="NuGet.Protocol" Version="7.3.1" />
         <PackageReference Include="NuGet.Versioning" Version="7.3.1" />
+        <PackageDownload Include="NServiceBus.Transport.Msmq.Sources" Version="[$(MsmqTransportSourcesVersion)]" />
+        <PackageDownload Include="Particular.Msmq" Version="[$(ParticularMsmqVersion)]" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <Compile Include="$(MsmqTransportSourcesPath)contentFiles/cs/net10.0-windows7.0/**/*.cs" LinkBase="Msmq/NServiceBus.Transport.Msmq" />
+        <Compile Include="$(ParticularMsmqPath)contentFiles/cs/net10.0-windows7.0/**/*.cs" LinkBase="Msmq/Particular.Msmq" />
+        <EmbeddedResource Include="$(MsmqTransportSourcesPath)build/net10.0-windows7.0/endpoints.xsd" LogicalName="Msmq.InstanceMapping.Validators.endpoints.xsd" Visible="false" />
+        <EmbeddedResource Include="$(MsmqTransportSourcesPath)build/net10.0-windows7.0/endpointsV2.xsd" LogicalName="Msmq.InstanceMapping.Validators.endpointsV2.xsd" Visible="false" />
     </ItemGroup>
 
     <ItemGroup>

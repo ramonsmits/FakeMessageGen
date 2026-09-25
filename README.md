@@ -56,5 +56,22 @@ FakeMessageGen.exe destination isError (maxQueueLength) (rateLimit) (maxConcurre
         The connection string to use for the destination.
     
         Will probe the format to check if it can assume RabbitMQ, Azure Service Bus,
-        or Learning transport.
+        Learning or MSMQ transport.
 ```
+
+## Transports
+
+| Transport | Connection string format | Environment variable |
+|-----------|--------------------------|----------------------|
+| Azure Service Bus | starts with `Endpoint=` | `CONNECTIONSTRING_AZURESERVICEBUS` |
+| RabbitMQ | starts with `host=` | `CONNECTIONSTRING_RABBITMQ` |
+| Learning | path-like (`/foo` or `C:\foo`) | `CONNECTIONSTRING_LEARNING` |
+| MSMQ | `msmq` | `CONNECTIONSTRING_MSMQ` |
+
+When no connection string is passed, all environment variables containing `CONNECTIONSTRING` are probed and a selection menu is shown.
+
+### MSMQ
+
+MSMQ is only available on Windows. The destination can be a local queue name (`audit`) or a remote queue (`audit@machine`). Messages are sent to transactional queues in one native MSMQ transaction per batch, and the queue length is read via the MSMQ management API.
+
+The MSMQ transport is compiled in from the [NServiceBus.Transport.Msmq.Sources](https://docs.particular.net/nuget/NServiceBus.Transport.Msmq.Sources) source package (and its `Particular.Msmq` dependency). These packages only target `net10.0-windows`, and a dotnet tool cannot target a Windows specific framework, so the project downloads the packages and compiles their sources into the `net10.0` build. They are only published on the Particular Software feed, which is configured in `nuget.config`.

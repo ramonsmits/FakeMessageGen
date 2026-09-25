@@ -10,8 +10,19 @@ Legend:
 - 🚨 = Breaking change
 - ✨ = Feature/Improvement
 - 💥 = Critical bug
-- 🐛 = Bub
+- 🐛 = Bug
+- 📦 = Dependency update
 
+
+## [Unreleased]
+
+- ✨ Added MSMQ transport support (Windows only) by compiling in the `NServiceBus.Transport.Msmq.Sources` source package. Select it with connection string `msmq` or the `CONNECTIONSTRING_MSMQ` environment variable
+- ✨ Added `nuget.config` with the Particular Software feed as the MSMQ source packages are not published on nuget.org
+- 📦 Upgraded NServiceBus from 9.2.8 to 10.2.9 (required by the MSMQ source package)
+- 📦 Upgraded NServiceBus.RabbitMQ from 10.1.7 to 11.2.1
+- 📦 Upgraded NServiceBus.Transport.AzureServiceBus from 5.1.2 to 6.5.0
+- 📦 Upgraded Azure.Messaging.ServiceBus from 7.20.1 to 7.21.0
+- 📦 Upgraded NuGet.Protocol from 7.3.0 to 7.3.1 (resolves low severity advisory GHSA-g4vj-cjjj-v7hg)
 
 ## [2.0.0] - 2026-01-22
 
