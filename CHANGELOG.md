@@ -16,6 +16,7 @@ Legend:
 
 ## [2026.1.0] - 2026-09-25
 
+- ✨ Added GitHub Actions: CI build on every push and pull request (Linux and Windows), release workflow that publishes to nuget.org via Trusted Publishing (no stored API key) and creates the GitHub release when a version tag is pushed
 - ✨ Version numbers now follow `YYYY.RELEASECOUNT.PATCH` (year, release number within the year, hotfix) instead of semantic versioning
 - ✨ Added MSMQ transport support (Windows only) by compiling in the `NServiceBus.Transport.Msmq.Sources` source package. Select it with connection string `msmq` or the `CONNECTIONSTRING_MSMQ` environment variable
 - ✨ Added `nuget.config` with the Particular Software feed as the MSMQ source packages are not published on nuget.org

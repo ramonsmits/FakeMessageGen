@@ -1,5 +1,7 @@
 # FakeMessageGen
 
+[![CI](https://github.com/ramonsmits/FakeMessageGen/actions/workflows/ci.yml/badge.svg)](https://github.com/ramonsmits/FakeMessageGen/actions/workflows/ci.yml) [![NuGet](https://img.shields.io/nuget/v/NBraceIT.FakeMessageGen)](https://www.nuget.org/packages/NBraceIT.FakeMessageGen)
+
 ## What
 
 This is a tool to generates fake NServiceBus messages without requiring processing first. Its purpose is to generate a large set of message for ingestion by Particular Software its ServiceControl audit and error ingestion software.
@@ -27,6 +29,22 @@ Versions follow `YYYY.RELEASECOUNT.PATCH`:
 - `PATCH` — hotfix number for that release, starting at 0
 
 For example, `2026.1.0` is the first release of 2026 and `2026.1.1` a hotfix for it. Versions are derived from git tags using [MinVer](https://github.com/adamralph/minver). Releases before 2026.1.0 used semantic versioning (`1.0.0` to `2.0.0`).
+
+## Release
+
+Releases are made by pushing a version tag. The [release workflow](.github/workflows/release.yml) packs the tool with that version, pushes it to nuget.org and creates a GitHub release using the matching `CHANGELOG.md` section, so add that section first.
+
+Publishing uses [nuget.org Trusted Publishing](https://learn.microsoft.com/en-us/nuget/nuget-org/trusted-publishing) (OpenID Connect, no stored API key). One-time setup:
+
+1. On nuget.org open your profile menu, **Trusted Publishing**, and add a policy with repository owner `ramonsmits`, repository `FakeMessageGen`, workflow file `release.yml` (no environment).
+2. Add the repository secret `NUGET_USER` containing the nuget.org profile name that owns the package (not the e-mail address).
+
+```
+git tag 2026.1.0
+git push origin 2026.1.0
+```
+
+Every push and pull request is built on Linux and Windows by the [CI workflow](.github/workflows/ci.yml).
 
 ## Help
 
