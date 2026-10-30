@@ -24,8 +24,10 @@
   .badge.paused { background:var(--pause) }
   .chart { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:10px 12px; margin-bottom:12px }
   .chart h2 { font-size:13px; margin:0 0 6px; color:var(--muted); font-weight:600 }
-  .legend span { display:inline-block; margin-right:12px; font-size:12px; color:var(--muted) }
+  .legend span { display:inline-block; margin-right:14px; font-size:12px; color:var(--muted); font-variant-numeric:tabular-nums }
+  .legend b { color:var(--fg); font-weight:600 }
   .legend i { display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:4px; vertical-align:-1px }
+  .legend i.dash { height:0; border-top:2px dashed; background:none; width:12px; vertical-align:2px }
   canvas { width:100%; height:200px; display:block }
   .foot { color:var(--muted); font-size:12px }
 </style>
@@ -39,12 +41,14 @@
   <div class="tile"><div class="k">Sends 5s</div><div class="v" id="s5">– <small>/s</small></div></div>
   <div class="tile"><div class="k">Sends 1 min</div><div class="v" id="s1">– <small>/s</small></div></div>
   <div class="tile"><div class="k">Sends 10 min</div><div class="v" id="s10">– <small>/s</small></div></div>
+  <div class="tile"><div class="k">Sends 1 hr</div><div class="v" id="s60">– <small>/s</small></div></div>
+  <div class="tile"><div class="k">Sends lifetime</div><div class="v" id="slife">– <small>/s</small></div></div>
   <div class="tile"><div class="k">Sends total</div><div class="v" id="stotal">–</div></div>
   <div class="tile"><div class="k">Faults total</div><div class="v" id="ftotal">–</div></div>
 </div>
-<div class="chart"><h2>Queue depth</h2><div class="legend"><span><i style="background:var(--c1)"></i>queued</span><span><i style="background:var(--c4)"></i>max</span><span><i style="background:var(--c3)"></i>resume</span></div><canvas id="cq"></canvas></div>
-<div class="chart"><h2>Send rate (messages per second)</h2><div class="legend"><span><i style="background:var(--c1)"></i>5s</span><span><i style="background:var(--c2)"></i>1 min</span><span><i style="background:var(--c3)"></i>10 min</span></div><canvas id="cs"></canvas></div>
-<div class="chart"><h2>Faults per second (1 min)</h2><div class="legend"><span><i style="background:var(--c4)"></i>faults</span></div><canvas id="cf"></canvas></div>
+<div class="chart"><h2>Queue depth</h2><div class="legend" id="lq"></div><canvas id="cq"></canvas></div>
+<div class="chart"><h2>Send rate (messages per second)</h2><div class="legend" id="ls"></div><canvas id="cs"></canvas></div>
+<div class="chart"><h2>Faults per second (1 min)</h2><div class="legend" id="lf"></div><canvas id="cf"></canvas></div>
 <div class="foot" id="foot">Samples every 2 seconds, last hour. Data: <a href="/api/samples">/api/samples</a></div>
 <script>
 const samples = [];
@@ -86,16 +90,41 @@ function render() {
   document.getElementById('s5').innerHTML = fmt(last.sends5s) + ' <small>/s</small>';
   document.getElementById('s1').innerHTML = fmt(last.sends1min) + ' <small>/s</small>';
   document.getElementById('s10').innerHTML = fmt(last.sends10min) + ' <small>/s</small>';
+  document.getElementById('s60').innerHTML = fmt(last.sends1hr) + ' <small>/s</small>';
+  document.getElementById('slife').innerHTML = fmt(last.sendsLifetime) + ' <small>/s</small>';
   document.getElementById('stotal').textContent = fmt0(last.sendsTotal);
   document.getElementById('ftotal').textContent = fmt0(last.faultsTotal);
 
-  const hl = settings ? [{ y: settings.maxQueueLength, color: css('--c4') }, { y: settings.resumeQueueLength, color: css('--c3') }] : [];
-  draw('cq', [{ key: 'queued', color: css('--c1') }], hl);
-  draw('cs', [{ key: 'sends5s', color: css('--c1') }, { key: 'sends1min', color: css('--c2') }, { key: 'sends10min', color: css('--c3') }]);
-  draw('cf', [{ key: 'faults1min', color: css('--c4') }]);
+  const hl = settings ? [{ y: settings.maxQueueLength, color: css('--c4'), label: 'max' }, { y: settings.resumeQueueLength, color: css('--c3'), label: 'resume' }] : [];
+  draw('cq', 'lq', [{ key: 'queued', color: css('--c1'), label: 'queued', digits: 0 }], hl);
+  // The 5 s series is spiky by nature: a batch lands or it does not. It is drawn as a faint area so the 1 and
+  // 10 minute lines stay readable, and the legend carries the mean of every series over the shown period.
+  draw('cs', 'ls', [
+    { key: 'sends5s', color: css('--c1'), label: '5s', fill: true },
+    { key: 'sends1min', color: css('--c2'), label: '1 min', width: 2 },
+    { key: 'sends10min', color: css('--c3'), label: '10 min', width: 2 }
+  ], [{ mean: 'sends5s', color: css('--muted'), label: 'mean of the shown period' }]);
+  draw('cf', 'lf', [{ key: 'faults1min', color: css('--c4'), label: 'faults' }]);
 }
 
-function draw(id, series, lines = []) {
+const mean = key => samples.reduce((a, s) => a + s[key], 0) / samples.length;
+
+function legend(id, series, lines) {
+  const last = samples[samples.length - 1];
+  const parts = series.map(k => {
+    const f = k.digits === 0 ? fmt0 : fmt;
+    return `<span><i style="background:${k.color}"></i>${k.label} <b>${f(last[k.key])}</b> · mean ${f(mean(k.key))}</span>`;
+  });
+  for (const l of lines) {
+    const v = l.mean ? mean(l.mean) : l.y;
+    parts.push(`<span><i class="dash" style="border-color:${l.color}"></i>${l.label} <b>${fmt(v)}</b></span>`);
+  }
+  document.getElementById(id).innerHTML = parts.join('');
+}
+
+function draw(id, legendId, series, lines = []) {
+  legend(legendId, series, lines);
+  for (const l of lines) if (l.mean) l.y = mean(l.mean);
   const c = document.getElementById(id);
   const dpr = window.devicePixelRatio || 1;
   const W = c.clientWidth, H = c.clientHeight;
@@ -128,11 +157,17 @@ function draw(id, series, lines = []) {
     g.strokeStyle = l.color; g.setLineDash([4, 4]);
     g.beginPath(); g.moveTo(pad.l, y(l.y)); g.lineTo(W - pad.r, y(l.y)); g.stroke();
   }
-  g.setLineDash([]); g.lineWidth = 1.5; g.lineJoin = 'round';
+  g.setLineDash([]); g.lineJoin = 'round';
   for (const k of series) {
-    g.strokeStyle = k.color; g.beginPath();
+    g.strokeStyle = k.color; g.lineWidth = k.width || 1.5; g.beginPath();
     samples.forEach((s, i) => { const px = x(s.t.getTime()), py = y(s[k.key]); i ? g.lineTo(px, py) : g.moveTo(px, py); });
-    g.stroke();
+    if (k.fill) {
+      g.lineWidth = 1; g.globalAlpha = 0.6; g.stroke();
+      g.lineTo(x(samples[samples.length - 1].t.getTime()), y(0)); g.lineTo(x(samples[0].t.getTime()), y(0)); g.closePath();
+      g.fillStyle = k.color; g.globalAlpha = 0.12; g.fill(); g.globalAlpha = 1;
+    } else {
+      g.stroke();
+    }
   }
 }
 
