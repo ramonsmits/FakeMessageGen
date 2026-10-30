@@ -16,6 +16,8 @@ Legend:
 
 ## [Unreleased]
 
+- 📦 ❗ Added a direct reference to System.Security.Cryptography.Pkcs 10.0.14. NuGet.Packaging 7.9.0 pulls in 8.0.1, which has known vulnerabilities ([GHSA-2fmv-rv2c-59x7](https://github.com/advisories/GHSA-2fmv-rv2c-59x7), [GHSA-846f-f764-76mx](https://github.com/advisories/GHSA-846f-f764-76mx))
+- 📦 Upgraded the test packages: Microsoft.Extensions.TimeProvider.Testing 9.9.0 to 10.11.0, Microsoft.NET.Test.Sdk 17.14.1 to 18.11.0, NUnit 4.4.0 to 5.0.0, NUnit3TestAdapter 5.1.0 to 6.3.1
 - ✨ Added a web view on `http://localhost:5080/` with graphs of the queue depth, send rates and faults over the last hour. `FAKEMESSAGEGEN_WEB` selects the port, `0` disables it. `GET /api/samples` returns the data as JSON
 - 🐛 Fixed the window rates (`10s` to `1hr`) being too low after a start: they divided by the full window length while the tool had run shorter than the window. The `1hr` rate was wrong for the first hour. The rates now divide by the uptime when that is shorter
 - 🐛 Fixed the window rates missing the boundary second of the window, which made a steady 10/s show as 9.6/s
