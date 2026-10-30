@@ -18,6 +18,7 @@ static partial class Program
     static bool isError;
 
     static int MaxQueueLength = 10000;
+    static int ResumeQueueLength => MaxQueueLength / 2;
     static float RateLimit = 5000;
     static int MaxConcurrency = 100;
     static int BatchSize = 16;
@@ -74,7 +75,8 @@ static partial class Program
                                            false   — generate fake audit messages.
 
                                        maxQueueLength (default {MaxQueueLength}):
-                                           Pauses sending when the destination reaches this depth.
+                                           Pauses sending when the destination is above this depth.
+                                           Sending resumes when the depth is at or below half of it.
 
                                        rateLimit (default {RateLimit}):
                                            Max messages per second (taking batchSize into account).
@@ -96,7 +98,7 @@ static partial class Program
                                    Tip: If you omit connectionString, it will try to resolve it from env or config.
 
                                    Output is a full-screen UI when attached to a terminal that supports ANSI escape sequences,
-                                   and plain lines (one queue length and rate line every {QueryDelayInterval.TotalSeconds:N0}s)
+                                   and plain lines (one queue length, send rate and fault line every {QueryDelayInterval.TotalSeconds:N0}s)
                                    when stdout is redirected or the console has no ANSI support (legacy Windows console).
                                    Set FAKEMESSAGEGEN_PLAIN=1 to force plain lines.
                                    """);
@@ -152,6 +154,8 @@ static partial class Program
                 var infrastructure = await transportDefinition.Initialize(hostSettings, [], []);
                 sender = infrastructure.Dispatcher;
 
+                Metrics.Start();
+
                 var queueLengthTask = CheckQueue(ShutdownCancellationTokenSource.Token);
 
                 var sendLoopTask = SendLoop(ShutdownCancellationTokenSource.Token);
@@ -195,7 +199,6 @@ static partial class Program
         {
             await rateLimiter.WaitAsync(token);
             await concurrency.WaitAsync(token);
-            Metrics.BatchSizeAdd(BatchSize);
 
             async void Do()
             {
@@ -413,10 +416,11 @@ static partial class Program
                 transaction: transaction
             );
             batch?.Commit();
+            Metrics.SendsAdd(length);
         }
         catch (Exception ex)
         {
-            Metrics.FaultsAdd(1);
+            Metrics.FaultsAdd(length);
             await log.WriteLineAsync(DateTime.UtcNow + " Send error: " + ex.Message);
         }
         finally
@@ -442,40 +446,34 @@ static partial class Program
             {
                 var queueLength = await queueMetrics.GetQueueLengthAsync(destination);
                 var rates = Metrics.SendsAggregator.GetRates();
+                var faults = Metrics.FaultsAggregator.GetRates();
                 await queue.WriteLineAsync(
                     $"{DateTime.Now} [queued: {queueLength,10:N0}" +
-                    $" Rates/sec [now:{rates.CurrentPerSecond,8:F1}/s]" +
+                    $" Rates/sec [5s:{rates.LastFiveSecondsPerSecond,8:F1}/s]" +
                     $" [10s:{rates.LastTenSecondsPerSecond,8:F1}/s]" +
                     $" [1min:{rates.LastMinutePerSecond,8:F1}/s]" +
                     $" [10min:{rates.LastTenMinutesPerSecond,8:F1}/s]" +
                     $" [1hr:{rates.LastHourPerSecond,8:F1}/s]" +
-                    $" [lifetime:{rates.LifetimePerSecond,8:F1}/s]"
+                    $" [lifetime:{rates.LifetimePerSecond,8:F1}/s]" +
+                    $" [faults: {faults.Total,6:N0} 1min:{faults.LastMinutePerSecond,6:F1}/s]"
                 );
 
-                if (queueLength > MaxQueueLength)
+                // Pause above MaxQueueLength, resume at or below ResumeQueueLength: the gap stops the
+                // sender from flapping on the threshold at every check
+                if (state == State.Running && queueLength > MaxQueueLength)
                 {
-                    // Ensure paused
-                    var result = InterlockedEx.CompareExchange(ref state, State.Paused, State.Running);
-
-                    if (result == State.Running)
+                    state = State.Paused;
+                    await queue.WriteLineAsync($"{State.Paused} until at or below {ResumeQueueLength:N0}");
+                    for (var x = 0; x < MaxConcurrency; x++)
                     {
-                        await queue.WriteLineAsync($"{State.Paused} until under {MaxQueueLength}");
-                        for (var x = 0; x < MaxConcurrency; x++)
-                        {
-                            await concurrency.WaitAsync(cancellationToken);
-                        }
+                        await concurrency.WaitAsync(cancellationToken);
                     }
                 }
-                else
+                else if (state == State.Paused && queueLength <= ResumeQueueLength)
                 {
-                    // Ensure running
-                    var result = InterlockedEx.CompareExchange(ref state, State.Running, State.Paused);
-
-                    if (result == State.Paused)
-                    {
-                        await queue.WriteLineAsync($"{State.Running} until above {MaxQueueLength}");
-                        concurrency.Release(MaxConcurrency);
-                    }
+                    state = State.Running;
+                    await queue.WriteLineAsync($"{State.Running} until above {MaxQueueLength:N0}");
+                    concurrency.Release(MaxConcurrency);
                 }
 
                 await Task

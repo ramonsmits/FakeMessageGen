@@ -1,124 +1,133 @@
 using System;
 using System.Diagnostics.Metrics;
-using System.Collections.Concurrent;
-using System.Linq;
 
-public class RateAggregator : IDisposable
+/// <summary>
+/// Tracks one counter instrument and reports its rate over sliding windows of whole seconds.
+/// </summary>
+/// <remarks>
+/// Measurements go into a ring of per-second buckets. A window rate is the sum of the complete seconds
+/// in the window divided by the number of complete seconds available, so the rate is correct from the
+/// second second of the process on, also when the process has run shorter than the window. The current,
+/// partial second is not part of any window.
+/// </remarks>
+public sealed class RateAggregator : IDisposable
 {
-    private record struct Bucket(DateTime Time, double Value);
+    // One hour of complete seconds plus the slot of the current second
+    const int Capacity = 3600 + 1;
 
-    // For current second measurements only
-    private readonly ConcurrentQueue<(DateTime Time, double Value)> currentSecond = new();
+    readonly double[] buckets = new double[Capacity];
+    readonly long[] bucketSecond = new long[Capacity];
+    readonly object gate = new();
+    readonly TimeProvider timeProvider;
+    readonly long startTimestamp;
+    readonly MeterListener listener;
+    double total;
 
-    // Pre-aggregated 1-second buckets for longer windows
-    private readonly ConcurrentQueue<Bucket> buckets = new();
-
-    private readonly DateTime startTime = DateTime.UtcNow;
-    private readonly MeterListener listener;
-    private double totalCount;
-    private DateTime lastBucketTime = DateTime.UtcNow;
-
-    public RateAggregator(Instrument instrumentToTrack)
+    public RateAggregator(Instrument instrument) : this(instrument, TimeProvider.System)
     {
+    }
+
+    public RateAggregator(Instrument instrument, TimeProvider timeProvider)
+    {
+        this.timeProvider = timeProvider;
+        startTimestamp = timeProvider.GetTimestamp();
+        Array.Fill(bucketSecond, -1L);
+
         listener = new MeterListener();
-        listener.InstrumentPublished = (instrument, listener) =>
+        listener.InstrumentPublished = (published, l) =>
         {
-            if (instrument == instrumentToTrack)
+            if (published == instrument)
             {
-                listener.EnableMeasurementEvents(instrument);
+                l.EnableMeasurementEvents(published);
             }
         };
-
-        listener.SetMeasurementEventCallback<double>((instrument, measurement, tags, state) =>
-        {
-            totalCount += measurement;
-            currentSecond.Enqueue((DateTime.UtcNow, measurement));
-            AggregateBuckets();
-            CleanupOldBuckets();
-        });
-
+        listener.SetMeasurementEventCallback<double>((_, measurement, _, _) => Add(measurement));
+        listener.SetMeasurementEventCallback<long>((_, measurement, _, _) => Add(measurement));
+        listener.SetMeasurementEventCallback<int>((_, measurement, _, _) => Add(measurement));
         listener.Start();
     }
 
-    private void AggregateBuckets()
+    TimeSpan Elapsed => timeProvider.GetElapsedTime(startTimestamp);
+
+    void Add(double value)
     {
-        var now = DateTime.UtcNow;
-        var currentBucketTime = new DateTime(now.Year, now.Month, now.Day,
-            now.Hour, now.Minute, now.Second, 0, DateTimeKind.Utc);
+        var second = (long)Elapsed.TotalSeconds;
+        var slot = (int)(second % Capacity);
 
-        if (currentBucketTime > lastBucketTime)
+        lock (gate)
         {
-            // Aggregate previous second into a bucket
-            var prevSecondMeasurements = currentSecond
-                .Where(m => m.Time < currentBucketTime)
-                .ToList();
-
-            if (prevSecondMeasurements.Any())
+            if (bucketSecond[slot] != second)
             {
-                var sum = prevSecondMeasurements.Sum(m => m.Value);
-                buckets.Enqueue(new Bucket(lastBucketTime, sum));
-
-                // Clean up aggregated measurements
-                while (currentSecond.TryPeek(out var oldest) && oldest.Time < currentBucketTime)
-                {
-                    currentSecond.TryDequeue(out _);
-                }
+                bucketSecond[slot] = second;
+                buckets[slot] = 0;
             }
 
-            lastBucketTime = currentBucketTime;
+            buckets[slot] += value;
+            total += value;
         }
     }
 
-    private double CalculateRate(TimeSpan window)
+    /// <summary>
+    /// Average per second over the last <paramref name="window"/> complete seconds, or over all complete
+    /// seconds since the start when that is less.
+    /// </summary>
+    public double Rate(TimeSpan window)
     {
-        var now = DateTime.UtcNow;
-        var windowStart = now - window;
+        var current = (long)Elapsed.TotalSeconds;
+        var seconds = Math.Min((long)window.TotalSeconds, current);
 
-        // For windows larger than 1 second, use the pre-aggregated buckets
-        var relevantBuckets = buckets
-            .Where(b => b.Time >= windowStart)
-            .ToList();
-
-        if (!relevantBuckets.Any()) return 0;
-
-        var sum = relevantBuckets.Sum(b => b.Value);
-        var latestBucket = relevantBuckets.Max(b => b.Time);
-
-        // If the last bucket is older than our window, decay the rate
-        if ((now - latestBucket) > window)
+        if (seconds <= 0)
+        {
             return 0;
+        }
 
-        return sum / window.TotalSeconds;
+        double sum = 0;
+
+        lock (gate)
+        {
+            for (var second = current - seconds; second < current; second++)
+            {
+                var slot = (int)(second % Capacity);
+
+                if (bucketSecond[slot] == second)
+                {
+                    sum += buckets[slot];
+                }
+            }
+        }
+
+        return sum / seconds;
     }
 
-    public double CurrentRate
+    /// <summary>
+    /// Sum of all measurements since the start.
+    /// </summary>
+    public double Total
     {
         get
         {
-            var now = DateTime.UtcNow;
-            var lastSecond = currentSecond.Where(m => (now - m.Time).TotalSeconds <= 1);
-            if (!lastSecond.Any()) return 0;
-            return lastSecond.Sum(m => m.Value);
+            lock (gate)
+            {
+                return total;
+            }
         }
     }
 
-    public double LastTenSecondsRate => CalculateRate(TimeSpan.FromSeconds(10));
-    public double LastMinuteRate => CalculateRate(TimeSpan.FromMinutes(1));
-    public double LastTenMinutesRate => CalculateRate(TimeSpan.FromMinutes(10));
-    public double LastHourRate => CalculateRate(TimeSpan.FromHours(1));
-    public double LifetimeRate => totalCount / (DateTime.UtcNow - startTime).TotalSeconds;
-
-    private void CleanupOldBuckets()
+    /// <summary>
+    /// Average per second since the start, pauses included.
+    /// </summary>
+    public double LifetimeRate
     {
-        var cutoff = DateTime.UtcNow - TimeSpan.FromHours(1);
-        while (buckets.TryPeek(out var oldest) && oldest.Time < cutoff)
+        get
         {
-            buckets.TryDequeue(out _);
+            var seconds = Elapsed.TotalSeconds;
+            return seconds > 0 ? Total / seconds : 0;
         }
     }
 
     public record Rates(
-        double CurrentPerSecond,
+        double Total,
+        double LastFiveSecondsPerSecond,
         double LastTenSecondsPerSecond,
         double LastMinutePerSecond,
         double LastTenMinutesPerSecond,
@@ -127,16 +136,17 @@ public class RateAggregator : IDisposable
     );
 
     public Rates GetRates() => new(
-        CurrentPerSecond: CurrentRate,
-        LastTenSecondsPerSecond: LastTenSecondsRate,
-        LastMinutePerSecond: LastMinuteRate,
-        LastTenMinutesPerSecond: LastTenMinutesRate,
-        LastHourPerSecond: LastHourRate,
+        Total: Total,
+        LastFiveSecondsPerSecond: Rate(TimeSpan.FromSeconds(5)),
+        LastTenSecondsPerSecond: Rate(TimeSpan.FromSeconds(10)),
+        LastMinutePerSecond: Rate(TimeSpan.FromMinutes(1)),
+        LastTenMinutesPerSecond: Rate(TimeSpan.FromMinutes(10)),
+        LastHourPerSecond: Rate(TimeSpan.FromHours(1)),
         LifetimePerSecond: LifetimeRate
     );
 
     public void Dispose()
     {
-        listener?.Dispose();
+        listener.Dispose();
     }
 }

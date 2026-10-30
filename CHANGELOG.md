@@ -16,6 +16,15 @@ Legend:
 
 ## [Unreleased]
 
+- 🐛 Fixed the window rates (`10s` to `1hr`) being too low after a start: they divided by the full window length while the tool had run shorter than the window. The `1hr` rate was wrong for the first hour. The rates now divide by the uptime when that is shorter
+- 🐛 Fixed the window rates missing the boundary second of the window, which made a steady 10/s show as 9.6/s
+- 🐛 Sends are now counted when the transport accepted the batch, not when the batch started. A failed batch no longer counts as sent
+- ✨ Failed messages are reported: the rate line ends with the fault total and the faults per second over the last minute
+- ✨ Replaced the `now` column (a 1 second snapshot that read 16.0 or 0.0 at low rates) with a `5s` window
+- ✨ Sending resumes when the queue depth is at or below half of `maxQueueLength`, instead of flapping on the threshold at every 2 second check
+- ✨ The rate aggregator uses a fixed ring of per-second buckets with a lock, instead of LINQ over a queue on every measurement without synchronization
+- ✨ Added a test project for the rate aggregator; CI runs it
+
 ## [2026.1.2] - 2026-09-25
 
 - 💥 Fixed the crash `IOException: The handle is invalid` on Windows when stdout is redirected (scheduled task, service, CI, `Start-Process -RedirectStandardOutput`). The tool now prints plain lines instead of the full-screen UI: one queue length and rate line every 2 seconds, without escape sequences
