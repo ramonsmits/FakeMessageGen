@@ -63,7 +63,8 @@ FakeMessagGen.exe destination isError [maxQueueLength] [rateLimit] [maxConcurren
         false   — generate fake audit messages.
 
     maxQueueLength (default 10000):
-        Pauses sending when the destination reaches this depth.
+        Pauses sending when the destination is above this depth.
+        Sending resumes when the depth is at or below half of it.
 
     rateLimit (default 5000):
         Max messages per second (taking batchSize into account).
@@ -85,7 +86,7 @@ FakeMessagGen.exe destination isError [maxQueueLength] [rateLimit] [maxConcurren
 Tip: If you omit connectionString, it will try to resolve it from env or config.
 
 Output is a full-screen UI when attached to a terminal that supports ANSI escape sequences,
-and plain lines (one queue length and rate line every 2s)
+and plain lines (one queue length, send rate and fault line every 2s)
 when stdout is redirected or the console has no ANSI support (legacy Windows console).
 Set FAKEMESSAGEGEN_PLAIN=1 to force plain lines.
 ```
@@ -102,7 +103,7 @@ The tool has two output modes and picks one at startup:
 | Mode | When | What you get |
 |------|------|--------------|
 | Interactive | stdout is a terminal that renders ANSI escape sequences | Full-screen UI with a main, queue length and log frame, updated live |
-| Plain | stdout is redirected (file, pipe, scheduled task, service, CI, `Start-Process -RedirectStandardOutput`), the console has no ANSI support, or `FAKEMESSAGEGEN_PLAIN=1` is set | Startup settings, then one line every 2 seconds with the queue length and send rates, plus NServiceBus log output at Info level and above. No escape sequences |
+| Plain | stdout is redirected (file, pipe, scheduled task, service, CI, `Start-Process -RedirectStandardOutput`), the console has no ANSI support, or `FAKEMESSAGEGEN_PLAIN=1` is set | Startup settings, then one line every 2 seconds with the queue length, send rates and faults, plus NServiceBus log output at Info level and above. No escape sequences |
 
 Plain output looks like this:
 
@@ -115,10 +116,32 @@ Plain output looks like this:
 MaxQueueLength: 100,000
 MaxConcurrency: 10
 Press CTRL+C to exit...
-2026-09-25 12:11:15 [queued:        400 Rates/sec [now:   176.0/s] [10s:    22.4/s] [1min:     3.7/s] [10min:     0.4/s] [1hr:     0.1/s] [lifetime:   190.3/s]
-2026-09-25 12:11:17 [queued:        784 Rates/sec [now:   176.0/s] [10s:    60.8/s] [1min:    10.1/s] [10min:     1.0/s] [1hr:     0.2/s] [lifetime:   191.0/s]
-Paused until under 100000
+2026-10-30 10:37:27 [queued:        112 Rates/sec [5s:    48.0/s] [10s:    48.0/s] [1min:    48.0/s] [10min:    48.0/s] [1hr:    48.0/s] [lifetime:    55.8/s] [faults:      0 1min:   0.0/s]
+2026-10-30 10:37:29 [queued:        208 Rates/sec [5s:    48.0/s] [10s:    48.0/s] [1min:    48.0/s] [10min:    48.0/s] [1hr:    48.0/s] [lifetime:    51.9/s] [faults:      0 1min:   0.0/s]
+Paused until at or below 100
 ```
+
+## Metrics
+
+The rate line reports messages that the transport accepted. A batch that fails counts as faults, not as sends.
+
+| Column | Meaning |
+|--------|---------|
+| `queued` | Depth of the destination queue, read from the transport every 2 seconds |
+| `5s` to `1hr` | Average sends per second over the last complete seconds of that window. When the tool has run shorter than the window, the average is over the uptime, so a fresh start shows the real rate and not a rate diluted by the full window |
+| `lifetime` | Sends divided by the uptime, pauses included |
+| `faults` | Total failed messages, and the failed messages per second over the last minute |
+
+Sending pauses when the queue depth is above `maxQueueLength` and resumes when it is at or below half of it. The gap keeps the sender from flapping on the threshold at every check.
+
+The counters are also published as the .NET meter `FakeMessageGen` (instruments `sends` and `faults`), so they can be read from a running process without the log:
+
+```
+dotnet tool install -g dotnet-counters
+dotnet-counters monitor -n fakemessagegen --counters FakeMessageGen
+```
+
+When the tool runs as a Windows service, run `dotnet-counters` from an elevated session.
 
 ANSI support on Windows is detected by asking the console to enable virtual terminal processing
 (`SetConsoleMode` with `ENABLE_VIRTUAL_TERMINAL_PROCESSING`). Windows Terminal has it on already; the

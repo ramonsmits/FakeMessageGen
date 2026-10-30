@@ -1,3 +1,4 @@
-﻿<Solution>
+<Solution>
   <Project Path="FakeMessageGen\FakeMessageGen.csproj" Type="Classic C#" />
+  <Project Path="FakeMessageGen.Tests\FakeMessageGen.Tests.csproj" Type="Classic C#" />
 </Solution>
