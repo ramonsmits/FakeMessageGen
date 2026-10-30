@@ -1,0 +1,152 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FakeMessageGen</title>
+<style>
+  :root { --bg:#f6f7f9; --fg:#1b1f24; --muted:#6b7280; --card:#ffffff; --line:#d7dbe0; --grid:#e5e7eb;
+          --c1:#2563eb; --c2:#16a34a; --c3:#d97706; --c4:#dc2626; --pause:#dc2626; --run:#16a34a; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0f1115; --fg:#e5e7eb; --muted:#9ca3af; --card:#181b21; --line:#2a2f37; --grid:#262a31;
+            --c1:#60a5fa; --c2:#4ade80; --c3:#fbbf24; --c4:#f87171; }
+  }
+  * { box-sizing:border-box }
+  body { margin:0; padding:16px; background:var(--bg); color:var(--fg); font:14px/1.4 system-ui, sans-serif }
+  h1 { font-size:18px; margin:0 0 4px }
+  .sub { color:var(--muted); margin-bottom:12px; word-break:break-all }
+  .tiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:8px; margin-bottom:16px }
+  .tile { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:10px 12px }
+  .tile .k { color:var(--muted); font-size:12px }
+  .tile .v { font-size:22px; font-variant-numeric:tabular-nums }
+  .tile .v small { font-size:12px; color:var(--muted) }
+  .badge { display:inline-block; padding:2px 8px; border-radius:999px; color:#fff; font-size:12px; background:var(--run) }
+  .badge.paused { background:var(--pause) }
+  .chart { background:var(--card); border:1px solid var(--line); border-radius:8px; padding:10px 12px; margin-bottom:12px }
+  .chart h2 { font-size:13px; margin:0 0 6px; color:var(--muted); font-weight:600 }
+  .legend span { display:inline-block; margin-right:12px; font-size:12px; color:var(--muted) }
+  .legend i { display:inline-block; width:10px; height:10px; border-radius:2px; margin-right:4px; vertical-align:-1px }
+  canvas { width:100%; height:200px; display:block }
+  .foot { color:var(--muted); font-size:12px }
+</style>
+</head>
+<body>
+<h1>FakeMessageGen</h1>
+<div class="sub" id="settings">connecting…</div>
+<div class="tiles">
+  <div class="tile"><div class="k">State</div><div class="v"><span class="badge" id="state">–</span></div></div>
+  <div class="tile"><div class="k">Queued</div><div class="v" id="queued">–</div></div>
+  <div class="tile"><div class="k">Sends 5s</div><div class="v" id="s5">– <small>/s</small></div></div>
+  <div class="tile"><div class="k">Sends 1 min</div><div class="v" id="s1">– <small>/s</small></div></div>
+  <div class="tile"><div class="k">Sends 10 min</div><div class="v" id="s10">– <small>/s</small></div></div>
+  <div class="tile"><div class="k">Sends total</div><div class="v" id="stotal">–</div></div>
+  <div class="tile"><div class="k">Faults total</div><div class="v" id="ftotal">–</div></div>
+</div>
+<div class="chart"><h2>Queue depth</h2><div class="legend"><span><i style="background:var(--c1)"></i>queued</span><span><i style="background:var(--c4)"></i>max</span><span><i style="background:var(--c3)"></i>resume</span></div><canvas id="cq"></canvas></div>
+<div class="chart"><h2>Send rate (messages per second)</h2><div class="legend"><span><i style="background:var(--c1)"></i>5s</span><span><i style="background:var(--c2)"></i>1 min</span><span><i style="background:var(--c3)"></i>10 min</span></div><canvas id="cs"></canvas></div>
+<div class="chart"><h2>Faults per second (1 min)</h2><div class="legend"><span><i style="background:var(--c4)"></i>faults</span></div><canvas id="cf"></canvas></div>
+<div class="foot" id="foot">Samples every 2 seconds, last hour. Data: <a href="/api/samples">/api/samples</a></div>
+<script>
+const samples = [];
+let lastTicks = 0, settings = null;
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const fmt = n => n.toLocaleString(undefined, { maximumFractionDigits: 1 });
+const fmt0 = n => n.toLocaleString(undefined, { maximumFractionDigits: 0 });
+
+// .NET ticks of a JS date: 100 ns units since 0001-01-01
+const toTicks = d => (d.getTime() + 62135596800000) * 10000;
+
+async function poll() {
+  try {
+    const r = await fetch('/api/samples?after=' + lastTicks);
+    const j = await r.json();
+    settings = j.settings;
+    for (const s of j.samples) { s.t = new Date(s.time); samples.push(s); }
+    if (j.samples.length) lastTicks = toTicks(samples[samples.length - 1].t);
+    const cutoff = Date.now() - 3600 * 1000;
+    while (samples.length && samples[0].t.getTime() < cutoff) samples.shift();
+    render();
+  } catch (e) {
+    document.getElementById('settings').textContent = 'No connection: ' + e.message;
+  }
+}
+
+function render() {
+  if (settings) {
+    document.getElementById('settings').textContent =
+      `${settings.transport} → ${settings.destination} (${settings.isError ? 'error' : 'audit'}) · ` +
+      `rate limit ${fmt(settings.rateLimit)}/s · batch ${settings.batchSize} · concurrency ${settings.maxConcurrency} · ` +
+      `pause above ${fmt0(settings.maxQueueLength)}, resume at ${fmt0(settings.resumeQueueLength)}`;
+  }
+  const last = samples[samples.length - 1];
+  if (!last) return;
+  const st = document.getElementById('state');
+  st.textContent = last.state; st.className = 'badge' + (last.state === 'Paused' ? ' paused' : '');
+  document.getElementById('queued').textContent = fmt0(last.queued);
+  document.getElementById('s5').innerHTML = fmt(last.sends5s) + ' <small>/s</small>';
+  document.getElementById('s1').innerHTML = fmt(last.sends1min) + ' <small>/s</small>';
+  document.getElementById('s10').innerHTML = fmt(last.sends10min) + ' <small>/s</small>';
+  document.getElementById('stotal').textContent = fmt0(last.sendsTotal);
+  document.getElementById('ftotal').textContent = fmt0(last.faultsTotal);
+
+  const hl = settings ? [{ y: settings.maxQueueLength, color: css('--c4') }, { y: settings.resumeQueueLength, color: css('--c3') }] : [];
+  draw('cq', [{ key: 'queued', color: css('--c1') }], hl);
+  draw('cs', [{ key: 'sends5s', color: css('--c1') }, { key: 'sends1min', color: css('--c2') }, { key: 'sends10min', color: css('--c3') }]);
+  draw('cf', [{ key: 'faults1min', color: css('--c4') }]);
+}
+
+function draw(id, series, lines = []) {
+  const c = document.getElementById(id);
+  const dpr = window.devicePixelRatio || 1;
+  const W = c.clientWidth, H = c.clientHeight;
+  c.width = W * dpr; c.height = H * dpr;
+  const g = c.getContext('2d'); g.scale(dpr, dpr);
+  const pad = { l: 56, r: 10, t: 8, b: 22 };
+  const w = W - pad.l - pad.r, h = H - pad.t - pad.b;
+  const t0 = samples[0].t.getTime(), t1 = Math.max(samples[samples.length - 1].t.getTime(), t0 + 60000);
+  let max = 0;
+  for (const s of samples) for (const k of series) max = Math.max(max, s[k.key]);
+  for (const l of lines) max = Math.max(max, l.y);
+  max = niceMax(max);
+  const x = t => pad.l + (t - t0) / (t1 - t0) * w;
+  const y = v => pad.t + h - v / max * h;
+
+  g.font = '11px system-ui, sans-serif';
+  g.strokeStyle = css('--grid'); g.fillStyle = css('--muted'); g.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const v = max * i / 4, yy = y(v);
+    g.beginPath(); g.moveTo(pad.l, yy); g.lineTo(W - pad.r, yy); g.stroke();
+    g.textAlign = 'right'; g.textBaseline = 'middle'; g.fillText(max < 2 ? v.toFixed(2) : fmt(v), pad.l - 6, yy);
+  }
+  const span = t1 - t0, step = span > 1800000 ? 600000 : span > 600000 ? 300000 : 60000;
+  g.textAlign = 'center'; g.textBaseline = 'top';
+  for (let t = Math.ceil(t0 / step) * step; t <= t1; t += step) {
+    const d = new Date(t);
+    g.fillText(d.toTimeString().slice(0, 5), x(t), pad.t + h + 6);
+  }
+  for (const l of lines) {
+    g.strokeStyle = l.color; g.setLineDash([4, 4]);
+    g.beginPath(); g.moveTo(pad.l, y(l.y)); g.lineTo(W - pad.r, y(l.y)); g.stroke();
+  }
+  g.setLineDash([]); g.lineWidth = 1.5; g.lineJoin = 'round';
+  for (const k of series) {
+    g.strokeStyle = k.color; g.beginPath();
+    samples.forEach((s, i) => { const px = x(s.t.getTime()), py = y(s[k.key]); i ? g.lineTo(px, py) : g.moveTo(px, py); });
+    g.stroke();
+  }
+}
+
+function niceMax(v) {
+  if (v <= 0) return 1;
+  const p = Math.pow(10, Math.floor(Math.log10(v)));
+  const m = v / p;
+  return (m <= 1 ? 1 : m <= 2 ? 2 : m <= 5 ? 5 : 10) * p;
+}
+
+window.addEventListener('resize', render);
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', render);
+poll();
+setInterval(poll, 2000);
+</script>
+</body>
+</html>

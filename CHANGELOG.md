@@ -16,6 +16,7 @@ Legend:
 
 ## [Unreleased]
 
+- ✨ Added a web view on `http://localhost:5080/` with graphs of the queue depth, send rates and faults over the last hour. `FAKEMESSAGEGEN_WEB` selects the port, `0` disables it. `GET /api/samples` returns the data as JSON
 - 🐛 Fixed the window rates (`10s` to `1hr`) being too low after a start: they divided by the full window length while the tool had run shorter than the window. The `1hr` rate was wrong for the first hour. The rates now divide by the uptime when that is shorter
 - 🐛 Fixed the window rates missing the boundary second of the window, which made a steady 10/s show as 9.6/s
 - 🐛 Sends are now counted when the transport accepted the batch, not when the batch started. A failed batch no longer counts as sent

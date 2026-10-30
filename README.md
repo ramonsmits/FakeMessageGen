@@ -89,6 +89,9 @@ Output is a full-screen UI when attached to a terminal that supports ANSI escape
 and plain lines (one queue length, send rate and fault line every 2s)
 when stdout is redirected or the console has no ANSI support (legacy Windows console).
 Set FAKEMESSAGEGEN_PLAIN=1 to force plain lines.
+
+A web view with graphs of the queue depth, send rates and faults listens on
+http://localhost:5080/ (last hour). Set FAKEMESSAGEGEN_WEB to another port, or to 0 to disable it.
 ```
 
 > The destination queue is never created by this tool: the transport is initialised with no receivers
@@ -142,6 +145,19 @@ dotnet-counters monitor -n fakemessagegen --counters FakeMessageGen
 ```
 
 When the tool runs as a Windows service, run `dotnet-counters` from an elevated session.
+
+## Web view
+
+![Web view with the queue depth, send rate and faults graphs](docs/web-view.png)
+
+The tool serves a page with graphs on `http://localhost:5080/`: the queue depth with the pause and resume
+lines, the send rate over 5 seconds, 1 minute and 10 minutes, and the faults per second. The page keeps
+the last hour, one sample every 2 seconds, and follows the light or dark theme of the browser.
+
+- `FAKEMESSAGEGEN_WEB=<port>` selects another port. `FAKEMESSAGEGEN_WEB=0` disables the web view.
+- The listener binds to `localhost` only. To open the page of a tool that runs on another machine, use an SSH tunnel or an RDP session on that machine.
+- When the port is in use, the tool logs a line and runs without the web view.
+- `GET /api/samples` returns the settings and the samples as JSON. `?after=<ticks>` returns only the samples newer than that .NET UTC tick count.
 
 ANSI support on Windows is detected by asking the console to enable virtual terminal processing
 (`SetConsoleMode` with `ENABLE_VIRTUAL_TERMINAL_PROCESSING`). Windows Terminal has it on already; the
