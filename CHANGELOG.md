@@ -16,7 +16,10 @@ Legend:
 
 ## [Unreleased]
 
+## [2026.3.0] - 2026-10-30
+
 - ✨ Web view: the legend of each chart shows the latest value and the mean over the shown period for every series, the 5 second send rate is drawn as a faint area under the 1 and 10 minute lines, and a dashed line marks the mean send rate of the shown period. Tiles for the 1 hour and lifetime send rates
+
 ## [2026.2.0] - 2026-10-30
 
 - 📦 ❗ Added a direct reference to System.Security.Cryptography.Pkcs 10.0.14. NuGet.Packaging 7.9.0 pulls in 8.0.1, which has known vulnerabilities ([GHSA-2fmv-rv2c-59x7](https://github.com/advisories/GHSA-2fmv-rv2c-59x7), [GHSA-846f-f764-76mx](https://github.com/advisories/GHSA-846f-f764-76mx))
