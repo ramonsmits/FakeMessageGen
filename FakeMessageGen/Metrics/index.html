@@ -116,7 +116,7 @@ function draw(id, series, lines = []) {
   for (let i = 0; i <= 4; i++) {
     const v = max * i / 4, yy = y(v);
     g.beginPath(); g.moveTo(pad.l, yy); g.lineTo(W - pad.r, yy); g.stroke();
-    g.textAlign = 'right'; g.textBaseline = 'middle'; g.fillText(fmt(v), pad.l - 6, yy);
+    g.textAlign = 'right'; g.textBaseline = 'middle'; g.fillText(max < 2 ? v.toFixed(2) : fmt(v), pad.l - 6, yy);
   }
   const span = t1 - t0, step = span > 1800000 ? 600000 : span > 600000 ? 300000 : 60000;
   g.textAlign = 'center'; g.textBaseline = 'top';

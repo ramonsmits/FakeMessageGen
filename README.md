@@ -148,6 +148,8 @@ When the tool runs as a Windows service, run `dotnet-counters` from an elevated 
 
 ## Web view
 
+![Web view with the queue depth, send rate and faults graphs](docs/web-view.png)
+
 The tool serves a page with graphs on `http://localhost:5080/`: the queue depth with the pause and resume
 lines, the send rate over 5 seconds, 1 minute and 10 minutes, and the faults per second. The page keeps
 the last hour, one sample every 2 seconds, and follows the light or dark theme of the browser.

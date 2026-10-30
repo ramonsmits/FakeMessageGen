@@ -150,6 +150,10 @@ static class MetricsWeb
                 var body = JsonSerializer.Serialize(new { settings, samples = SamplesAfter(after) }, JsonOptions);
                 await Write(response, "application/json", body);
             }
+            else if (path == "/favicon.ico")
+            {
+                response.StatusCode = 204;
+            }
             else
             {
                 response.StatusCode = 404;
