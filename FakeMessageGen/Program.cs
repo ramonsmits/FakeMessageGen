@@ -25,6 +25,7 @@ static partial class Program
     private static string ConnectionString;
 
     static readonly TimeSpan QueryDelayInterval = TimeSpan.FromSeconds(2);
+    static int WebPort = 5080;
 
     static SemaphoreSlim concurrency;
     static RateGate rateLimiter;
@@ -101,6 +102,9 @@ static partial class Program
                                    and plain lines (one queue length, send rate and fault line every {QueryDelayInterval.TotalSeconds:N0}s)
                                    when stdout is redirected or the console has no ANSI support (legacy Windows console).
                                    Set FAKEMESSAGEGEN_PLAIN=1 to force plain lines.
+
+                                   A web view with graphs of the queue depth, send rates and faults listens on
+                                   http://localhost:{WebPort}/ (last hour). Set FAKEMESSAGEGEN_WEB to another port, or to 0 to disable it.
                                    """);
                 return;
             }
@@ -156,6 +160,21 @@ static partial class Program
 
                 Metrics.Start();
 
+                if (WebPort > 0 && MetricsWeb.TryStart(WebPort, new
+                    {
+                        transport = transportDefinition.GetType().Name,
+                        destination,
+                        isError,
+                        rateLimit = RateLimit,
+                        batchSize = BatchSize,
+                        maxConcurrency = MaxConcurrency,
+                        maxQueueLength = MaxQueueLength,
+                        resumeQueueLength = ResumeQueueLength
+                    }, main))
+                {
+                    Console.WriteLine($"         Web view: {MetricsWeb.Url}");
+                }
+
                 var queueLengthTask = CheckQueue(ShutdownCancellationTokenSource.Token);
 
                 var sendLoopTask = SendLoop(ShutdownCancellationTokenSource.Token);
@@ -170,6 +189,8 @@ static partial class Program
                     await Task.WhenAll(sendLoopTask, queueLengthTask);
                     await infrastructure.Shutdown();
                 }
+
+                MetricsWeb.Stop();
 
                 await Task.WhenAny(
                     Task.Delay(TimeSpan.FromSeconds(5)),
@@ -370,6 +391,11 @@ static partial class Program
         CultureInfo.CurrentCulture = customCulture;
         CultureInfo.CurrentUICulture = customCulture;
 
+        if (int.TryParse(Environment.GetEnvironmentVariable("FAKEMESSAGEGEN_WEB"), out var webPort))
+        {
+            WebPort = webPort;
+        }
+
         var forcePlain = Environment.GetEnvironmentVariable("FAKEMESSAGEGEN_PLAIN");
         interactive = !(forcePlain is "1" || bool.TryParse(forcePlain, out var b) && b) && VirtualTerminal.TryEnable();
         if (!interactive)
@@ -457,6 +483,19 @@ static partial class Program
                     $" [lifetime:{rates.LifetimePerSecond,8:F1}/s]" +
                     $" [faults: {faults.Total,6:N0} 1min:{faults.LastMinutePerSecond,6:F1}/s]"
                 );
+
+                MetricsWeb.Add(new MetricsWeb.Sample(
+                    Time: DateTime.UtcNow,
+                    Queued: queueLength,
+                    State: state.ToString(),
+                    Sends5s: rates.LastFiveSecondsPerSecond,
+                    Sends1min: rates.LastMinutePerSecond,
+                    Sends10min: rates.LastTenMinutesPerSecond,
+                    Sends1hr: rates.LastHourPerSecond,
+                    SendsLifetime: rates.LifetimePerSecond,
+                    SendsTotal: rates.Total,
+                    Faults1min: faults.LastMinutePerSecond,
+                    FaultsTotal: faults.Total));
 
                 // Pause above MaxQueueLength, resume at or below ResumeQueueLength: the gap stops the
                 // sender from flapping on the threshold at every check

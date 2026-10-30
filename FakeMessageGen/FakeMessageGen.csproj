@@ -48,6 +48,10 @@
     </ItemGroup>
 
     <ItemGroup>
+        <EmbeddedResource Include="Metrics/index.html" LogicalName="index.html" />
+    </ItemGroup>
+
+    <ItemGroup>
         <None Update="original.txt">
             <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
         </None>
