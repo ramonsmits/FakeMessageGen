@@ -14,7 +14,7 @@ Legend:
 - 📦 = Dependency update
 
 
-## [Unreleased]
+## [2026.3.1] - 2026-11-26
 
 - 🐛 Fixed the `NServiceBus.ContentType` header: the value was `" text/plain"` with a leading space. A receiver that tests the content type saw the body as not text. For example, the ServiceControl SQL persister then stored each body in external storage and not inline
 
