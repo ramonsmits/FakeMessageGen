@@ -61,8 +61,8 @@ public class FakeMessageGenerator
         var headers = new Dictionary<string, string>
         {
             [Headers.MessageId] = id,
-            [Headers.ContentType] = " text/plain",
-            //[Headers.ContentType] = " application/octet-stream",
+            [Headers.ContentType] = "text/plain",
+            //[Headers.ContentType] = "application/octet-stream",
             [Headers.EnclosedMessageTypes] = "random_" + Random.Shared.Next(EnclosedMessageTypesMax),
             [Headers.CorrelationId] = now.ToString("yyyy-M-dThh") + "_" + Random.Shared.Next(CorrelationIdMax),
             [Headers.ConversationId] = now.ToString("yyyy-M-dThh") + "_" + Random.Shared.Next(ConversationIdMax),

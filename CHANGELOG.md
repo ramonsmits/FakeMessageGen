@@ -16,6 +16,8 @@ Legend:
 
 ## [Unreleased]
 
+- 🐛 Fixed the `NServiceBus.ContentType` header: the value was `" text/plain"` with a leading space. A receiver that tests the content type saw the body as not text. For example, the ServiceControl SQL persister then stored each body in external storage and not inline
+
 ## [2026.3.0] - 2026-10-30
 
 - ✨ Web view: the legend of each chart shows the latest value and the mean over the shown period for every series, the 5 second send rate is drawn as a faint area under the 1 and 10 minute lines, and a dashed line marks the mean send rate of the shown period. Tiles for the 1 hour and lifetime send rates
